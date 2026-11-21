@@ -10,16 +10,20 @@ le sirven con el link para postular.
 | Argentina, México, Perú, Venezuela | Bumeran |
 | Ecuador | Multitrabajos |
 | Panamá | Konzerta |
-| Colombia | Computrabajo |
+| Los 17 países (Argentina, Bolivia, Chile, Colombia, Costa Rica, Ecuador, El Salvador, Guatemala, Honduras, México, Nicaragua, Panamá, Paraguay, Perú, República Dominicana, Uruguay, Venezuela) | Computrabajo |
 
 Laborum, Bumeran, Multitrabajos y Konzerta son la misma plataforma (Jobint) con otra marca: un solo conector,
 `src/sources/jobint.ts`. Agregar un país de esa plataforma es una línea en `JOBINT_SITES`. El país de cada
 persona sale del código de su número de WhatsApp.
 
-Computrabajo (`src/sources/computrabajo.ts`) no tiene API: se lee el HTML del listado de cada departamento,
+Computrabajo (`src/sources/computrabajo.ts`) no tiene API: se lee el HTML del listado de cada región,
 ordenado por fecha, y el detalle de cada aviso nuevo (JSON-LD, o el HTML si no lo trae). Es el conector más
 frágil: si el portal cambia su HTML, la corrida lo informa como error de esa fuente. Solo recorre rutas que
-su `robots.txt` permite. Los portales que prohíben el rastreo o lo bloquean no se incluyen.
+su `robots.txt` permite. Los portales que prohíben el rastreo o lo bloquean no se incluyen. La lista de regiones por
+país está en `src/sources/computrabajo-regions.json` y se regenera con `node scripts/computrabajo-regions.ts`.
+La primera corrida trae solo la primera página de cada región (unos 20 avisos) y tarda cerca de una hora.
+
+`node src/cli.ts counts` muestra cuántos avisos declara cada portal; de ahí sale la tabla de la landing.
 
 ## Cómo funciona
 

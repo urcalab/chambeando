@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { fetchText, sleep } from "./http.ts";
 import { decodeEntities, modalityOf, regionOf, stripHtml, type Country } from "../text.ts";
@@ -6,19 +7,22 @@ import type { NewJob, Source } from "./types.ts";
 /**
  * Computrabajo no tiene API: el listado es HTML y cada aviso trae sus datos como JSON-LD (JobPosting).
  * No hay un listado nacional ordenado por fecha, así que se recorre cada región con
- * `/empleos-en-<región>?by=publicationtime`, que su robots.txt permite.
+ * `/empleos-en-<región>?by=publicationtime`, que su robots.txt permite. Opera en 17 países.
  */
-export const COMPUTRABAJO_SITES: Record<string, { country: Country; domain: string; regions: string[] }> = {
-  "computrabajo-co": {
-    country: "CO",
-    domain: "co.computrabajo.com",
-    regions: [
-      "bogota-dc", "antioquia", "valle-del-cauca", "cundinamarca", "atlantico", "santander", "risaralda",
-      "bolivar", "caldas", "tolima", "meta", "huila", "norte-de-santander", "boyaca", "quindio", "magdalena",
-      "cesar", "narino", "cauca", "cordoba", "casanare", "la-guajira", "sucre",
-    ],
-  },
-};
+type RegionFile = Record<string, { prefix: string; regions: Array<{ slug: string; name: string; count: number }> }>;
+
+// Generado por scripts/computrabajo-regions.ts: las páginas de región que existen en cada país.
+const REGION_FILE = JSON.parse(readFileSync(new URL("./computrabajo-regions.json", import.meta.url), "utf8")) as RegionFile;
+
+export type ComputrabajoSite = { country: Country; domain: string; prefix: string; regions: Array<{ slug: string; name: string }> };
+
+/** Un sitio por país: "computrabajo-co", "computrabajo-mx"... */
+export const COMPUTRABAJO_SITES: Record<string, ComputrabajoSite> = Object.fromEntries(
+  Object.entries(REGION_FILE).map(([cc, site]) => [
+    `computrabajo-${cc}`,
+    { country: cc.toUpperCase() as Country, domain: `${cc}.computrabajo.com`, prefix: site.prefix, regions: site.regions },
+  ]),
+);
 
 export type Listed = { id: string; title: string; path: string };
 
@@ -84,7 +88,7 @@ export function parseDetailHtml(html: string): { description: string; company: s
   };
 }
 
-export function toJob(siteKey: string, regionSlug: string, listed: Listed, detailHtml: string): NewJob | null {
+export function toJob(siteKey: string, regionName: string, listed: Listed, detailHtml: string): NewJob | null {
   const site = COMPUTRABAJO_SITES[siteKey]!;
   const p = parsePosting(detailHtml);
   const page = parseDetailHtml(detailHtml);
@@ -103,7 +107,7 @@ export function toJob(siteKey: string, regionSlug: string, listed: Listed, detai
     title: listed.title,
     company: p?.hiringOrganization?.name ?? page?.company ?? null,
     location,
-    region: regionOf(site.country, regionSlug.replace(/-/g, " ")),
+    region: regionOf(site.country, regionName),
     modality: p?.jobLocationType === "TELECOMMUTE" ? "remoto" : modalityOf(listed.title),
     job_type: p?.employmentType ?? null,
     salary: salary?.value && salary.unitText === "MONTH" ? Math.round(salary.value) : null,
@@ -122,11 +126,13 @@ export function computrabajo(siteKey: string): Source {
     let pages = 0;
     for (const region of site.regions) {
       for (let page = 1; page <= maxPages; page++) {
-        const url = `https://${site.domain}/empleos-en-${region}?by=publicationtime${page > 1 ? `&p=${page}` : ""}`;
+        const url = `https://${site.domain}/${site.prefix}${region.slug}?by=publicationtime${page > 1 ? `&p=${page}` : ""}`;
         const listing = parseListing(await fetchText(url));
         pages++;
         // Toda región listada tiene avisos: una página vacía es un bloqueo o un cambio en el HTML.
         if (page === 1 && listing.length === 0) throw new Error(`${url} no trae avisos (¿bloqueo o cambio del HTML?)`);
+        // Primera vez en esta región: solo la primera página, para no pedir miles de detalles de una vez.
+        const cold = page === 1 && !listing.some((item) => isKnown(`${siteKey}:${item.id}`));
         let fresh = 0;
         for (const item of listing) {
           const id = `${siteKey}:${item.id}`;
@@ -134,7 +140,7 @@ export function computrabajo(siteKey: string): Source {
           seen.add(id);
           // Un aviso que falla (despublicado entre el listado y el detalle) no detiene la corrida.
           const job = await fetchText(`https://${site.domain}${item.path}`)
-            .then((html) => toJob(siteKey, region, item, html))
+            .then((html) => toJob(siteKey, region.name, item, html))
             .catch(() => null);
           if (job) {
             jobs.push(job);
@@ -142,7 +148,7 @@ export function computrabajo(siteKey: string): Source {
           } else invalid++;
           await sleep(400);
         }
-        if (fresh === 0) break;
+        if (fresh === 0 || cold) break;
         await sleep(800);
       }
     }

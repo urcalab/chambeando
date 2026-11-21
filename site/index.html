@@ -124,10 +124,20 @@ section > h2 { font-size: clamp(1.75rem, 3.6vw, 2.75rem); font-weight: 700; max-
 .ledger .keep li { background: var(--marker); color: var(--marker-ink); }
 .ledger .never li { border: 1px solid var(--line); color: var(--muted); text-decoration: line-through; text-decoration-thickness: 1.5px; }
 
-.countries { margin-top: 3rem; display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.75rem 1.25rem; }
-.countries h3, .eyebrow { font: 600 0.8125rem/1.2 var(--body); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
-.countries ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.countries li { padding: 0.4rem 0.8rem; border: 1px solid var(--line); border-radius: 999px; font-weight: 500; background: var(--surface); }
+.eyebrow { font: 600 0.8125rem/1.2 var(--body); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+
+.reach { margin-top: 2.5rem; font-weight: 500; }
+.reach a, .faq p a { text-decoration: underline; text-decoration-color: var(--marker); text-decoration-thickness: 3px; text-underline-offset: 4px; }
+#fuentes .intro { margin-top: 1rem; color: var(--muted); max-width: 40rem; }
+.sources { margin-top: 2rem; overflow-x: auto; max-width: 46rem; }
+.sources table { width: 100%; border-collapse: collapse; font-size: 1rem; }
+.sources th, .sources td { text-align: left; padding: 0.7rem 0.75rem 0.7rem 0; border-bottom: 1px solid var(--line); vertical-align: baseline; }
+.sources thead th { font: 600 0.8125rem/1.2 var(--body); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+.sources tbody th { font-weight: 600; white-space: nowrap; }
+.sources td { color: var(--muted); }
+.sources .num { text-align: right; padding-right: 0; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sources tbody .num { color: var(--ink); font-weight: 600; }
+.fine { margin-top: 1.25rem; font-size: 0.875rem; color: var(--muted); max-width: 46rem; }
 
 .made-in { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.5rem 3rem; align-items: start; }
 .made-in h2 { font-size: clamp(1.75rem, 3.6vw, 2.75rem); font-weight: 700; margin-top: 0.75rem; }
@@ -151,6 +161,9 @@ footer { border-top: 1px solid var(--line); padding-block: 1.75rem 2.5rem; color
   .phone { justify-self: center; transform: none; }
   .steps { grid-template-columns: minmax(0, 1fr); gap: 1.75rem; }
   .privacy, .made-in { grid-template-columns: minmax(0, 1fr); }
+  .sources table { font-size: 0.9375rem; }
+  .sources tbody th { white-space: normal; }
+  .sources th, .sources td { padding-right: 0.6rem; }
   section { padding-block: 3rem; }
   .top small { display: none; }
 }
@@ -205,10 +218,39 @@ footer { border-top: 1px solid var(--line); padding-block: 1.75rem 2.5rem; color
         <li><h3>Busca por ti</h3><p>Cada hora lee los avisos nuevos de los portales de empleo de tu país y descarta los que no tienen que ver contigo.</p></li>
         <li><h3>Te escribe con el link</h3><p>Cuando encuentra algo para ti, te llega a WhatsApp. Entras al link y postulas directo en el portal donde se publicó.</p></li>
       </ol>
-      <div class="countries">
-        <h3>Hoy busca en</h3>
-        <ul><li>Argentina</li><li>Chile</li><li>Colombia</li><li>Ecuador</li><li>México</li><li>Panamá</li><li>Perú</li><li>Venezuela</li></ul>
+      <p class="reach">Hoy busca en <a href="#fuentes">17 países de Latinoamérica</a>.</p>
+    </div>
+  </section>
+
+  <section id="fuentes">
+    <div class="wrap">
+      <h2>De dónde salen los avisos</h2>
+      <p class="intro">El agente lee los portales de empleo más grandes de cada país. Entre todos publican más de 430.000 avisos.</p>
+      <div class="sources">
+        <table>
+          <thead><tr><th scope="col">País</th><th scope="col">Portales</th><th scope="col" class="num">Avisos</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Chile</th><td>Computrabajo, Laborum, Trabajando</td><td class="num">107.000</td></tr>
+            <tr><th scope="row">México</th><td>Computrabajo, Bumeran</td><td class="num">103.000</td></tr>
+            <tr><th scope="row">Perú</th><td>Computrabajo, Bumeran</td><td class="num">94.000</td></tr>
+            <tr><th scope="row">Colombia</th><td>Computrabajo</td><td class="num">72.000</td></tr>
+            <tr><th scope="row">Argentina</th><td>Computrabajo, Bumeran</td><td class="num">24.000</td></tr>
+            <tr><th scope="row">Guatemala</th><td>Computrabajo</td><td class="num">11.000</td></tr>
+            <tr><th scope="row">Ecuador</th><td>Multitrabajos, Computrabajo</td><td class="num">6.700</td></tr>
+            <tr><th scope="row">Venezuela</th><td>Computrabajo, Bumeran</td><td class="num">5.800</td></tr>
+            <tr><th scope="row">Panamá</th><td>Konzerta, Computrabajo</td><td class="num">4.000</td></tr>
+            <tr><th scope="row">El Salvador</th><td>Computrabajo</td><td class="num">4.000</td></tr>
+            <tr><th scope="row">Honduras</th><td>Computrabajo</td><td class="num">2.400</td></tr>
+            <tr><th scope="row">República Dominicana</th><td>Computrabajo</td><td class="num">1.800</td></tr>
+            <tr><th scope="row">Uruguay</th><td>Computrabajo</td><td class="num">1.700</td></tr>
+            <tr><th scope="row">Nicaragua</th><td>Computrabajo</td><td class="num">1.500</td></tr>
+            <tr><th scope="row">Costa Rica</th><td>Computrabajo</td><td class="num">1.500</td></tr>
+            <tr><th scope="row">Bolivia</th><td>Computrabajo</td><td class="num">150</td></tr>
+            <tr><th scope="row">Paraguay</th><td>Computrabajo</td><td class="num">150</td></tr>
+          </tbody>
+        </table>
       </div>
+      <p class="fine">Cifras aproximadas: los avisos activos que cada portal declaraba en noviembre de 2026. Un mismo aviso puede estar en más de un portal. Avísame no está afiliado a estos portales; cada aviso que recibes enlaza a su publicación original.</p>
     </div>
   </section>
 
@@ -237,11 +279,11 @@ footer { border-top: 1px solid var(--line); padding-block: 1.75rem 2.5rem; color
       <div class="faq">
         <details>
           <summary>¿De dónde salen los avisos?</summary>
-          <p>De portales de empleo de tu país. El agente no publica avisos propios: te manda el link al aviso original y postulas ahí.</p>
+          <p>De los portales de empleo más grandes de tu país, como Computrabajo, Bumeran, Laborum o Trabajando. El agente no publica avisos propios: te manda el link al aviso original y postulas ahí. La lista completa está <a href="#fuentes">más arriba</a>.</p>
         </details>
         <details>
           <summary>¿En qué países funciona?</summary>
-          <p>Hoy en Argentina, Chile, Colombia, Ecuador, México, Panamá, Perú y Venezuela. Sabe de qué país eres por el código de tu número; si buscas trabajo en otro país de la lista, se lo dices.</p>
+          <p>En 17 países de Latinoamérica, de México a Argentina. Sabe de qué país eres por el código de tu número; si buscas trabajo en otro país de la lista, se lo dices.</p>
         </details>
         <details>
           <summary>¿El agente postula por mí?</summary>

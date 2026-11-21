@@ -8,6 +8,13 @@ export function jobText(j: Pick<NewJob, "title" | "company" | "location" | "desc
   return [j.title, j.company, j.location, j.description.slice(0, 1200)].filter(Boolean).join(". ");
 }
 
+/** "computrabajo-mx" -> "computrabajo"; los sitios Jobint (laborum, bumeran-*, multitrabajos, konzerta) comparten operador. */
+export function operatorOf(sourceKey: string): string {
+  if (sourceKey.startsWith("computrabajo")) return "computrabajo";
+  if (sourceKey === "trabajando") return "trabajando";
+  return "jobint";
+}
+
 export type IngestReport = Record<string, { added: number; pages: number; invalid: number; error?: string }>;
 
 /** Trae los avisos nuevos de cada portal y los guarda con su embedding. Un portal caído no detiene al otro. */
@@ -24,7 +31,14 @@ export async function ingest(
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const report: IngestReport = {};
-  for (const [name, { source, maxPages }] of Object.entries(sources)) {
+  // Los portales de un mismo operador van uno tras otro, para no sumarle carga; operadores distintos, en paralelo.
+  const lanes = new Map<string, Array<[string, { source: Source; maxPages: number }]>>();
+  for (const entry of Object.entries(sources)) {
+    const lane = operatorOf(entry[0]);
+    lanes.set(lane, [...(lanes.get(lane) ?? []), entry]);
+  }
+  await Promise.all([...lanes.values()].map(async (lane) => {
+   for (const [name, { source, maxPages }] of lane) {
     try {
       const res = await source({ maxPages, isKnown: (id) => known.get(id) !== undefined });
       const vectors = await embed(res.jobs.map(jobText), "passage");
@@ -39,7 +53,8 @@ export async function ingest(
     } catch (e) {
       report[name] = { added: 0, pages: 0, invalid: 0, error: (e as Error).message };
     }
-  }
+   }
+  }));
   const cutoff = new Date(Date.now() - config.jobRetentionDays * 86_400_000).toISOString();
   db.prepare("DELETE FROM deliveries WHERE job_id IN (SELECT id FROM jobs WHERE first_seen_at < ?)").run(cutoff);
   db.prepare("DELETE FROM jobs WHERE first_seen_at < ?").run(cutoff);

@@ -75,11 +75,19 @@ export function regionKey(text: string | null | undefined): string | null {
   return null;
 }
 
-export const COUNTRIES = { CL: "Chile", AR: "Argentina", MX: "México", CO: "Colombia", PE: "Perú", EC: "Ecuador", PA: "Panamá", VE: "Venezuela" } as const;
+export const COUNTRIES = {
+  AR: "Argentina", BO: "Bolivia", CL: "Chile", CO: "Colombia", CR: "Costa Rica", DO: "República Dominicana",
+  EC: "Ecuador", SV: "El Salvador", GT: "Guatemala", HN: "Honduras", MX: "México", NI: "Nicaragua",
+  PA: "Panamá", PY: "Paraguay", PE: "Perú", UY: "Uruguay", VE: "Venezuela",
+} as const;
 export type Country = keyof typeof COUNTRIES;
 
+// Los prefijos más largos primero, para que +593 no se lea como +59x de otro país.
 const PHONE_PREFIX: Array<[string, Country]> = [
-  ["+593", "EC"], ["+507", "PA"], ["+56", "CL"], ["+57", "CO"], ["+54", "AR"], ["+52", "MX"], ["+51", "PE"], ["+58", "VE"],
+  ["+1809", "DO"], ["+1829", "DO"], ["+1849", "DO"],
+  ["+591", "BO"], ["+593", "EC"], ["+595", "PY"], ["+598", "UY"],
+  ["+502", "GT"], ["+503", "SV"], ["+504", "HN"], ["+505", "NI"], ["+506", "CR"], ["+507", "PA"],
+  ["+51", "PE"], ["+52", "MX"], ["+54", "AR"], ["+56", "CL"], ["+57", "CO"], ["+58", "VE"],
 ];
 
 /** El país de un número de WhatsApp por su código, o null si no atendemos ese país. */
@@ -106,6 +114,10 @@ export function regionOf(country: Country, location: string | null | undefined):
   if (!location) return null;
   if (country === "CL") return regionKey(location);
   // Computrabajo escribe "Bogotá, D.C.": la coma es parte del nombre del departamento.
+  // Bumeran dice "Distrito Federal" y Computrabajo "Ciudad de México DF": una sola clave.
+  if (country === "MX" && /\b(distrito federal|ciudad de mexico|cdmx|df)\b/.test(normalize(location.split(",").pop() ?? ""))) {
+    return "ciudad de mexico";
+  }
   if (country === "CO") return normalize(location.replace(/[,\s]\s*d\.?\s*c\.?\s*$/i, "")) || null;
   const parts = location.split(",");
   return normalize(parts[parts.length - 1] ?? "") || null;

@@ -1,0 +1,1347 @@
+{
+ "ar": {
+  "prefix": "empleos-en-",
+  "regions": [
+   {
+    "slug": "buenos-aires-gba",
+    "name": "Buenos Aires-GBA",
+    "count": 3960
+   },
+   {
+    "slug": "capital-federal",
+    "name": "Capital Federal",
+    "count": 3933
+   },
+   {
+    "slug": "cordoba",
+    "name": "Córdoba",
+    "count": 2000
+   },
+   {
+    "slug": "buenos-aires",
+    "name": "Buenos Aires",
+    "count": 1836
+   },
+   {
+    "slug": "santa-fe",
+    "name": "Santa Fe",
+    "count": 1134
+   },
+   {
+    "slug": "neuquen",
+    "name": "Neuquén",
+    "count": 483
+   },
+   {
+    "slug": "mendoza",
+    "name": "Mendoza",
+    "count": 312
+   },
+   {
+    "slug": "salta",
+    "name": "Salta",
+    "count": 188
+   },
+   {
+    "slug": "rio-negro",
+    "name": "Río Negro",
+    "count": 181
+   },
+   {
+    "slug": "tucuman",
+    "name": "Tucumán",
+    "count": 179
+   },
+   {
+    "slug": "entre-rios",
+    "name": "Entre Ríos",
+    "count": 144
+   },
+   {
+    "slug": "san-juan",
+    "name": "San Juan",
+    "count": 114
+   },
+   {
+    "slug": "chubut",
+    "name": "Chubut",
+    "count": 85
+   },
+   {
+    "slug": "chaco",
+    "name": "Chaco",
+    "count": 85
+   },
+   {
+    "slug": "san-luis",
+    "name": "San Luis",
+    "count": 76
+   },
+   {
+    "slug": "misiones",
+    "name": "Misiones",
+    "count": 65
+   },
+   {
+    "slug": "corrientes",
+    "name": "Corrientes",
+    "count": 65
+   },
+   {
+    "slug": "la-pampa",
+    "name": "La Pampa",
+    "count": 48
+   },
+   {
+    "slug": "jujuy",
+    "name": "Jujuy",
+    "count": 44
+   },
+   {
+    "slug": "catamarca",
+    "name": "Catamarca",
+    "count": 40
+   },
+   {
+    "slug": "santiago-del-estero",
+    "name": "Santiago del Estero",
+    "count": 39
+   },
+   {
+    "slug": "santa-cruz",
+    "name": "Santa Cruz",
+    "count": 30
+   },
+   {
+    "slug": "tierra-del-fuego",
+    "name": "Tierra del Fuego",
+    "count": 28
+   },
+   {
+    "slug": "la-rioja",
+    "name": "La Rioja",
+    "count": 23
+   },
+   {
+    "slug": "formosa",
+    "name": "Formosa",
+    "count": 21
+   }
+  ]
+ },
+ "bo": {
+  "prefix": "empleos-en-",
+  "regions": [
+   {
+    "slug": "santa-cruz",
+    "name": "Santa Cruz",
+    "count": 78
+   },
+   {
+    "slug": "la-paz",
+    "name": "La Paz",
+    "count": 59
+   },
+   {
+    "slug": "cochabamba",
+    "name": "Cochabamba",
+    "count": 11
+   },
+   {
+    "slug": "beni",
+    "name": "Beni",
+    "count": 2
+   },
+   {
+    "slug": "potosi",
+    "name": "Potosí",
+    "count": 1
+   },
+   {
+    "slug": "oruro",
+    "name": "Oruro",
+    "count": 1
+   },
+   {
+    "slug": "tarija",
+    "name": "Tarija",
+    "count": 1
+   },
+   {
+    "slug": "pando",
+    "name": "Pando",
+    "count": 1
+   }
+  ]
+ },
+ "cl": {
+  "prefix": "empleos-en-",
+  "regions": [
+   {
+    "slug": "rmetropolitana",
+    "name": "R.Metropolitana",
+    "count": 52850
+   },
+   {
+    "slug": "antofagasta",
+    "name": "Antofagasta",
+    "count": 5039
+   },
+   {
+    "slug": "biobio",
+    "name": "Bíobío",
+    "count": 3867
+   },
+   {
+    "slug": "valparaiso",
+    "name": "Valparaíso",
+    "count": 3676
+   },
+   {
+    "slug": "los-lagos",
+    "name": "Los Lagos",
+    "count": 2270
+   },
+   {
+    "slug": "libertador-b-o-higgins",
+    "name": "Libertador B. O Higgins",
+    "count": 1986
+   },
+   {
+    "slug": "coquimbo",
+    "name": "Coquimbo",
+    "count": 1594
+   },
+   {
+    "slug": "maule",
+    "name": "Maule",
+    "count": 1550
+   },
+   {
+    "slug": "atacama",
+    "name": "Atacama",
+    "count": 1226
+   },
+   {
+    "slug": "araucania",
+    "name": "Araucanía",
+    "count": 1086
+   },
+   {
+    "slug": "tarapaca",
+    "name": "Tarapacá",
+    "count": 812
+   },
+   {
+    "slug": "los-rios",
+    "name": "Los Ríos",
+    "count": 626
+   },
+   {
+    "slug": "magallanes-y-antartica-chilena",
+    "name": "Magallanes y Antártica Chilena",
+    "count": 456
+   },
+   {
+    "slug": "arica-y-parinacota",
+    "name": "Arica y Parinacota",
+    "count": 365
+   }
+  ]
+ },
+ "co": {
+  "prefix": "empleos-en-",
+  "regions": [
+   {
+    "slug": "bogota-dc",
+    "name": "Bogotá, D.C.",
+    "count": 26904
+   },
+   {
+    "slug": "antioquia",
+    "name": "Antioquia",
+    "count": 14943
+   },
+   {
+    "slug": "valle-del-cauca",
+    "name": "Valle del Cauca",
+    "count": 7599
+   },
+   {
+    "slug": "cundinamarca",
+    "name": "Cundinamarca",
+    "count": 6162
+   },
+   {
+    "slug": "atlantico",
+    "name": "Atlántico",
+    "count": 2769
+   },
+   {
+    "slug": "santander",
+    "name": "Santander",
+    "count": 2729
+   },
+   {
+    "slug": "risaralda",
+    "name": "Risaralda",
+    "count": 1849
+   },
+   {
+    "slug": "bolivar",
+    "name": "Bolívar",
+    "count": 1257
+   },
+   {
+    "slug": "caldas",
+    "name": "Caldas",
+    "count": 1020
+   },
+   {
+    "slug": "tolima",
+    "name": "Tolima",
+    "count": 847
+   },
+   {
+    "slug": "meta",
+    "name": "Meta",
+    "count": 805
+   },
+   {
+    "slug": "huila",
+    "name": "Huila",
+    "count": 584
+   },
+   {
+    "slug": "norte-de-santander",
+    "name": "Norte de Santander",
+    "count": 581
+   },
+   {
+    "slug": "boyaca",
+    "name": "Boyacá",
+    "count": 576
+   },
+   {
+    "slug": "quindio",
+    "name": "Quindio",
+    "count": 490
+   },
+   {
+    "slug": "magdalena",
+    "name": "Magdalena",
+    "count": 470
+   },
+   {
+    "slug": "cesar",
+    "name": "Cesar",
+    "count": 368
+   },
+   {
+    "slug": "narino",
+    "name": "Nariño",
+    "count": 355
+   },
+   {
+    "slug": "cauca",
+    "name": "Cauca",
+    "count": 344
+   },
+   {
+    "slug": "cordoba",
+    "name": "Córdoba",
+    "count": 333
+   },
+   {
+    "slug": "casanare",
+    "name": "Casanare",
+    "count": 215
+   },
+   {
+    "slug": "la-guajira",
+    "name": "La Guajira",
+    "count": 185
+   },
+   {
+    "slug": "sucre",
+    "name": "Sucre",
+    "count": 139
+   }
+  ]
+ },
+ "cr": {
+  "prefix": "empleos-en-",
+  "regions": [
+   {
+    "slug": "san-jose",
+    "name": "San José",
+    "count": 724
+   },
+   {
+    "slug": "alajuela",
+    "name": "Alajuela",
+    "count": 289
+   },
+   {
+    "slug": "heredia",
+    "name": "Heredia",
+    "count": 241
+   },
+   {
+    "slug": "cartago",
+    "name": "Cartago",
+    "count": 131
+   },
+   {
+    "slug": "guanacaste",
+    "name": "Guanacaste",
+    "count": 69
+   },
+   {
+    "slug": "puntarenas",
+    "name": "Puntarenas",
+    "count": 43
+   },
+   {
+    "slug": "limon",
+    "name": "Limón",
+    "count": 37
+   }
+  ]
+ },
+ "do": {
+  "prefix": "empleos-en-",
+  "regions": [
+   {
+    "slug": "distrito-nacional",
+    "name": "Distrito Nacional",
+    "count": 734
+   },
+   {
+    "slug": "santo-domingo",
+    "name": "Santo Domingo",
+    "count": 486
+   },
+   {
+    "slug": "santiago",
+    "name": "Santiago",
+    "count": 305
+   },
+   {
+    "slug": "la-altagracia",
+    "name": "La Altagracia",
+    "count": 180
+   },
+   {
+    "slug": "la-vega",
+    "name": "La Vega",
+    "count": 46
+   },
+   {
+    "slug": "la-romana",
+    "name": "La Romana",
+    "count": 28
+   },
+   {
+    "slug": "san-cristobal",
+    "name": "San Cristóbal",
+    "count": 25
+   },
+   {
+    "slug": "puerto-plata",
+    "name": "Puerto Plata",
+    "count": 13
+   },
+   {
+    "slug": "san-pedro-de-macoris",
+    "name": "San Pedro de Macorís",
+    "count": 11
+   },
+   {
+    "slug": "san-juan",
+    "name": "San Juan",
+    "count": 3
+   },
+   {
+    "slug": "montecristi",
+    "name": "Montecristi",
+    "count": 2
+   }
+  ]
+ },
+ "ec": {
+  "prefix": "empleos-en-",
+  "regions": [
+   {
+    "slug": "pichincha",
+    "name": "Pichincha",
+    "count": 560
+   },
+   {
+    "slug": "guayas",
+    "name": "Guayas",
+    "count": 339
+   },
+   {
+    "slug": "azuay",
+    "name": "Azuay",
+    "count": 53
+   },
+   {
+    "slug": "tungurahua",
+    "name": "Tungurahua",
+    "count": 25
+   },
+   {
+    "slug": "manabi",
+    "name": "Manabí",
+    "count": 24
+   },
+   {
+    "slug": "el-oro",
+    "name": "El Oro",
+    "count": 22
+   },
+   {
+    "slug": "santo-domingo-de-los-tsachilas",
+    "name": "Santo Domingo de los Tsáchilas",
+    "count": 19
+   },
+   {
+    "slug": "los-rios",
+    "name": "Los Ríos",
+    "count": 8
+   },
+   {
+    "slug": "loja",
+    "name": "Loja",
+    "count": 8
+   },
+   {
+    "slug": "imbabura",
+    "name": "Imbabura",
+    "count": 7
+   },
+   {
+    "slug": "esmeraldas",
+    "name": "Esmeraldas",
+    "count": 4
+   },
+   {
+    "slug": "cotopaxi",
+    "name": "Cotopaxi",
+    "count": 4
+   },
+   {
+    "slug": "chimborazo",
+    "name": "Chimborazo",
+    "count": 2
+   },
+   {
+    "slug": "santa-elena",
+    "name": "Santa Elena",
+    "count": 1
+   }
+  ]
+ },
+ "gt": {
+  "prefix": "empleos-en-",
+  "regions": [
+   {
+    "slug": "guatemala",
+    "name": "Guatemala",
+    "count": 8308
+   },
+   {
+    "slug": "escuintla",
+    "name": "Escuintla",
+    "count": 715
+   },
+   {
+    "slug": "quetzaltenango",
+    "name": "Quetzaltenango",
+    "count": 503
+   },
+   {
+    "slug": "huehuetenango",
+    "name": "Huehuetenango",
+    "count": 232
+   },
+   {
+    "slug": "sacatepequez",
+    "name": "Sacatepéquez",
+    "count": 201
+   },
+   {
+    "slug": "alta-verapaz",
+    "name": "Alta Verapaz",
+    "count": 197
+   },
+   {
+    "slug": "chimaltenango",
+    "name": "Chimaltenango",
+    "count": 189
+   },
+   {
+    "slug": "peten",
+    "name": "Petén",
+    "count": 171
+   },
+   {
+    "slug": "izabal",
+    "name": "Izabal",
+    "count": 148
+   },
+   {
+    "slug": "san-marcos",
+    "name": "San Marcos",
+    "count": 142
+   },
+   {
+    "slug": "suchitepequez",
+    "name": "Suchitepéquez",
+    "count": 109
+   },
+   {
+    "slug": "jalapa",
+    "name": "Jalapa",
+    "count": 62
+   }
+  ]
+ },
+ "hn": {
+  "prefix": "empleos-en-",
+  "regions": [
+   {
+    "slug": "cortes",
+    "name": "Cortés",
+    "count": 1065
+   },
+   {
+    "slug": "francisco-morazan",
+    "name": "Francisco Morazán",
+    "count": 719
+   },
+   {
+    "slug": "copan",
+    "name": "Copán",
+    "count": 114
+   },
+   {
+    "slug": "comayagua",
+    "name": "Comayagua",
+    "count": 105
+   },
+   {
+    "slug": "atlantida",
+    "name": "Atlántida",
+    "count": 88
+   },
+   {
+    "slug": "olancho",
+    "name": "Olancho",
+    "count": 62
+   },
+   {
+    "slug": "el-paraiso",
+    "name": "El Paraíso",
+    "count": 62
+   },
+   {
+    "slug": "choluteca",
+    "name": "Choluteca",
+    "count": 57
+   },
+   {
+    "slug": "yoro",
+    "name": "Yoro",
+    "count": 56
+   },
+   {
+    "slug": "colon",
+    "name": "Colón",
+    "count": 55
+   },
+   {
+    "slug": "valle",
+    "name": "Valle",
+    "count": 26
+   },
+   {
+    "slug": "la-paz",
+    "name": "La Paz",
+    "count": 13
+   }
+  ]
+ },
+ "mx": {
+  "prefix": "empleos-en-",
+  "regions": [
+   {
+    "slug": "ciudad-de-mexico",
+    "name": "Ciudad de México DF",
+    "count": 24985
+   },
+   {
+    "slug": "estado-de-mexico",
+    "name": "Estado de México",
+    "count": 17356
+   },
+   {
+    "slug": "jalisco",
+    "name": "Jalisco",
+    "count": 10181
+   },
+   {
+    "slug": "nuevo-leon",
+    "name": "Nuevo León",
+    "count": 6103
+   },
+   {
+    "slug": "queretaro",
+    "name": "Querétaro",
+    "count": 4544
+   },
+   {
+    "slug": "guanajuato",
+    "name": "Guanajuato",
+    "count": 4281
+   },
+   {
+    "slug": "puebla",
+    "name": "Puebla",
+    "count": 3902
+   },
+   {
+    "slug": "veracruz-de-ignacio-de-la-llave",
+    "name": "Veracruz",
+    "count": 2619
+   },
+   {
+    "slug": "yucatan",
+    "name": "Yucatán",
+    "count": 2464
+   },
+   {
+    "slug": "quintana-roo",
+    "name": "Quintana Roo",
+    "count": 2339
+   },
+   {
+    "slug": "sonora",
+    "name": "Sonora",
+    "count": 1762
+   },
+   {
+    "slug": "baja-california",
+    "name": "Baja California",
+    "count": 1594
+   },
+   {
+    "slug": "san-luis-potosi",
+    "name": "San Luis Potosí",
+    "count": 1437
+   },
+   {
+    "slug": "sinaloa",
+    "name": "Sinaloa",
+    "count": 1418
+   },
+   {
+    "slug": "chihuahua",
+    "name": "Chihuahua",
+    "count": 1334
+   },
+   {
+    "slug": "hidalgo",
+    "name": "Hidalgo",
+    "count": 1295
+   },
+   {
+    "slug": "oaxaca",
+    "name": "Oaxaca",
+    "count": 1168
+   },
+   {
+    "slug": "aguascalientes",
+    "name": "Aguascalientes",
+    "count": 1096
+   },
+   {
+    "slug": "chiapas",
+    "name": "Chiapas",
+    "count": 977
+   },
+   {
+    "slug": "morelos",
+    "name": "Morelos",
+    "count": 965
+   },
+   {
+    "slug": "baja-california-sur",
+    "name": "Baja California Sur",
+    "count": 949
+   },
+   {
+    "slug": "tamaulipas",
+    "name": "Tamaulipas",
+    "count": 931
+   },
+   {
+    "slug": "tabasco",
+    "name": "Tabasco",
+    "count": 762
+   },
+   {
+    "slug": "colima",
+    "name": "Colima",
+    "count": 698
+   },
+   {
+    "slug": "guerrero",
+    "name": "Guerrero",
+    "count": 665
+   },
+   {
+    "slug": "nayarit",
+    "name": "Nayarit",
+    "count": 409
+   },
+   {
+    "slug": "tlaxcala",
+    "name": "Tlaxcala",
+    "count": 332
+   },
+   {
+    "slug": "zacatecas",
+    "name": "Zacatecas",
+    "count": 286
+   },
+   {
+    "slug": "durango",
+    "name": "Durango",
+    "count": 280
+   },
+   {
+    "slug": "campeche",
+    "name": "Campeche",
+    "count": 262
+   }
+  ]
+ },
+ "ni": {
+  "prefix": "empleos-en-",
+  "regions": [
+   {
+    "slug": "managua",
+    "name": "Managua",
+    "count": 1203
+   },
+   {
+    "slug": "masaya",
+    "name": "Masaya",
+    "count": 69
+   },
+   {
+    "slug": "matagalpa",
+    "name": "Matagalpa",
+    "count": 53
+   },
+   {
+    "slug": "leon",
+    "name": "León",
+    "count": 49
+   },
+   {
+    "slug": "esteli",
+    "name": "Estelí",
+    "count": 47
+   },
+   {
+    "slug": "chinandega",
+    "name": "Chinandega",
+    "count": 28
+   },
+   {
+    "slug": "chontales",
+    "name": "Chontales",
+    "count": 28
+   },
+   {
+    "slug": "rivas",
+    "name": "Rivas",
+    "count": 22
+   },
+   {
+    "slug": "granada",
+    "name": "Granada",
+    "count": 16
+   },
+   {
+    "slug": "atlantico-norte",
+    "name": "Atlántico Norte",
+    "count": 13
+   },
+   {
+    "slug": "jinotega",
+    "name": "Jinotega",
+    "count": 11
+   },
+   {
+    "slug": "nueva-segovia",
+    "name": "Nueva Segovia",
+    "count": 8
+   }
+  ]
+ },
+ "pa": {
+  "prefix": "empleos-en-",
+  "regions": [
+   {
+    "slug": "panama",
+    "name": "Panamá",
+    "count": 1350
+   },
+   {
+    "slug": "panama-oeste",
+    "name": "Panamá Oeste",
+    "count": 88
+   },
+   {
+    "slug": "colon",
+    "name": "Colón",
+    "count": 66
+   },
+   {
+    "slug": "chiriqui",
+    "name": "Chiriquí",
+    "count": 59
+   },
+   {
+    "slug": "veraguas",
+    "name": "Veraguas",
+    "count": 32
+   },
+   {
+    "slug": "cocle",
+    "name": "Coclé",
+    "count": 28
+   },
+   {
+    "slug": "herrera",
+    "name": "Herrera",
+    "count": 6
+   },
+   {
+    "slug": "los-santos",
+    "name": "Los Santos",
+    "count": 6
+   },
+   {
+    "slug": "bocas-del-toro",
+    "name": "Bocas del Toro",
+    "count": 6
+   },
+   {
+    "slug": "darien",
+    "name": "Darién",
+    "count": 2
+   }
+  ]
+ },
+ "pe": {
+  "prefix": "empleos-en-",
+  "regions": [
+   {
+    "slug": "lima",
+    "name": "Lima",
+    "count": 40954
+   },
+   {
+    "slug": "arequipa",
+    "name": "Arequipa",
+    "count": 3573
+   },
+   {
+    "slug": "callao",
+    "name": "Callao",
+    "count": 2721
+   },
+   {
+    "slug": "la-libertad",
+    "name": "La Libertad",
+    "count": 2327
+   },
+   {
+    "slug": "ica",
+    "name": "Ica",
+    "count": 1436
+   },
+   {
+    "slug": "cusco",
+    "name": "Cusco",
+    "count": 1162
+   },
+   {
+    "slug": "lambayeque",
+    "name": "Lambayeque",
+    "count": 1068
+   },
+   {
+    "slug": "piura",
+    "name": "Piura",
+    "count": 972
+   },
+   {
+    "slug": "junin",
+    "name": "Junin",
+    "count": 938
+   },
+   {
+    "slug": "ancash",
+    "name": "Ancash",
+    "count": 515
+   },
+   {
+    "slug": "puno",
+    "name": "Puno",
+    "count": 468
+   },
+   {
+    "slug": "cajamarca",
+    "name": "Cajamarca",
+    "count": 347
+   },
+   {
+    "slug": "san-martin",
+    "name": "San Martin",
+    "count": 264
+   },
+   {
+    "slug": "moquegua",
+    "name": "Moquegua",
+    "count": 254
+   },
+   {
+    "slug": "tacna",
+    "name": "Tacna",
+    "count": 227
+   },
+   {
+    "slug": "ucayali",
+    "name": "Ucayali",
+    "count": 201
+   },
+   {
+    "slug": "huanuco",
+    "name": "Huanuco",
+    "count": 194
+   },
+   {
+    "slug": "ayacucho",
+    "name": "Ayacucho",
+    "count": 180
+   },
+   {
+    "slug": "loreto",
+    "name": "Loreto",
+    "count": 151
+   },
+   {
+    "slug": "apurimac",
+    "name": "Apurimac",
+    "count": 133
+   },
+   {
+    "slug": "madre-de-dios",
+    "name": "Madre De Dios",
+    "count": 122
+   },
+   {
+    "slug": "tumbes",
+    "name": "Tumbes",
+    "count": 118
+   },
+   {
+    "slug": "pasco",
+    "name": "Pasco",
+    "count": 105
+   },
+   {
+    "slug": "huancavelica",
+    "name": "Huancavelica",
+    "count": 53
+   },
+   {
+    "slug": "amazonas",
+    "name": "Amazonas",
+    "count": 42
+   }
+  ]
+ },
+ "py": {
+  "prefix": "empleos-en-",
+  "regions": [
+   {
+    "slug": "asuncion",
+    "name": "Asunción",
+    "count": 109
+   },
+   {
+    "slug": "alto-parana",
+    "name": "Alto Paraná",
+    "count": 17
+   },
+   {
+    "slug": "central",
+    "name": "Central",
+    "count": 16
+   },
+   {
+    "slug": "caaguazu",
+    "name": "Caaguazú",
+    "count": 3
+   },
+   {
+    "slug": "itapua",
+    "name": "Itapúa",
+    "count": 2
+   }
+  ]
+ },
+ "sv": {
+  "prefix": "empleos-en-",
+  "regions": [
+   {
+    "slug": "san-salvador",
+    "name": "San Salvador",
+    "count": 2311
+   },
+   {
+    "slug": "la-libertad",
+    "name": "La Libertad",
+    "count": 911
+   },
+   {
+    "slug": "san-miguel",
+    "name": "San Miguel",
+    "count": 237
+   },
+   {
+    "slug": "santa-ana",
+    "name": "Santa Ana",
+    "count": 141
+   },
+   {
+    "slug": "sonsonate",
+    "name": "Sonsonate",
+    "count": 95
+   },
+   {
+    "slug": "la-paz",
+    "name": "La Paz",
+    "count": 72
+   },
+   {
+    "slug": "la-union",
+    "name": "La Unión",
+    "count": 51
+   },
+   {
+    "slug": "usulutan",
+    "name": "Usulután",
+    "count": 45
+   },
+   {
+    "slug": "ahuachapan",
+    "name": "Ahuachapán",
+    "count": 42
+   },
+   {
+    "slug": "chalatenango",
+    "name": "Chalatenango",
+    "count": 30
+   },
+   {
+    "slug": "cuscatlan",
+    "name": "Cuscatlán",
+    "count": 30
+   }
+  ]
+ },
+ "uy": {
+  "prefix": "empleos-en-",
+  "regions": [
+   {
+    "slug": "montevideo",
+    "name": "Montevideo",
+    "count": 1202
+   },
+   {
+    "slug": "maldonado",
+    "name": "Maldonado",
+    "count": 201
+   },
+   {
+    "slug": "canelones",
+    "name": "Canelones",
+    "count": 193
+   },
+   {
+    "slug": "colonia",
+    "name": "Colonia",
+    "count": 34
+   },
+   {
+    "slug": "paysandu",
+    "name": "Paysandú",
+    "count": 20
+   },
+   {
+    "slug": "rocha",
+    "name": "Rocha",
+    "count": 18
+   },
+   {
+    "slug": "salto",
+    "name": "Salto",
+    "count": 16
+   },
+   {
+    "slug": "durazno",
+    "name": "Durazno",
+    "count": 15
+   },
+   {
+    "slug": "soriano",
+    "name": "Soriano",
+    "count": 13
+   },
+   {
+    "slug": "tacuarembo",
+    "name": "Tacuarembó",
+    "count": 11
+   },
+   {
+    "slug": "san-jose",
+    "name": "San José",
+    "count": 10
+   },
+   {
+    "slug": "lavalleja",
+    "name": "Lavalleja",
+    "count": 10
+   }
+  ]
+ },
+ "ve": {
+  "prefix": "empleos-en-",
+  "regions": [
+   {
+    "slug": "distrito-capital",
+    "name": "Distrito Capital",
+    "count": 1441
+   },
+   {
+    "slug": "carabobo",
+    "name": "Carabobo",
+    "count": 962
+   },
+   {
+    "slug": "zulia",
+    "name": "Zulia",
+    "count": 619
+   },
+   {
+    "slug": "aragua",
+    "name": "Aragua",
+    "count": 382
+   },
+   {
+    "slug": "lara",
+    "name": "Lara",
+    "count": 363
+   },
+   {
+    "slug": "miranda",
+    "name": "Miranda",
+    "count": 333
+   },
+   {
+    "slug": "anzoategui",
+    "name": "Anzoátegui",
+    "count": 271
+   },
+   {
+    "slug": "tachira",
+    "name": "Táchira",
+    "count": 229
+   },
+   {
+    "slug": "bolivar",
+    "name": "Bolívar",
+    "count": 101
+   },
+   {
+    "slug": "portuguesa",
+    "name": "Portuguesa",
+    "count": 84
+   },
+   {
+    "slug": "nueva-esparta",
+    "name": "Nueva Esparta",
+    "count": 75
+   },
+   {
+    "slug": "barinas",
+    "name": "Barinas",
+    "count": 69
+   },
+   {
+    "slug": "monagas",
+    "name": "Monagas",
+    "count": 68
+   },
+   {
+    "slug": "merida",
+    "name": "Mérida",
+    "count": 55
+   },
+   {
+    "slug": "falcon",
+    "name": "Falcón",
+    "count": 45
+   },
+   {
+    "slug": "sucre",
+    "name": "Sucre",
+    "count": 21
+   },
+   {
+    "slug": "cojedes",
+    "name": "Cojedes",
+    "count": 19
+   },
+   {
+    "slug": "trujillo",
+    "name": "Trujillo",
+    "count": 17
+   },
+   {
+    "slug": "yaracuy",
+    "name": "Yaracuy",
+    "count": 17
+   },
+   {
+    "slug": "guarico",
+    "name": "Guárico",
+    "count": 10
+   },
+   {
+    "slug": "apure",
+    "name": "Apure",
+    "count": 2
+   }
+  ]
+ }
+}

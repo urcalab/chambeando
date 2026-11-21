@@ -30,8 +30,15 @@ test("país por código del número y región fuera de Chile", () => {
   assert.equal(countryOfPhone("+5491122223333"), "AR");
   assert.equal(countryOfPhone("+5215512345678"), "MX");
   assert.equal(countryOfPhone("+593991234567"), "EC");
+  assert.equal(countryOfPhone("+59171234567"), "BO");
+  assert.equal(countryOfPhone("+18095551234"), "DO");
+  assert.equal(countryOfPhone("+50688887777"), "CR");
   assert.equal(countryOfPhone("+5511912345678"), null);
   assert.equal(regionOf("PE", "Cercado De Lima, Lima"), "lima");
+  assert.equal(regionOf("MX", "Churubusco, Distrito Federal"), "ciudad de mexico");
+  assert.equal(regionOf("MX", "Ciudad de México DF"), "ciudad de mexico");
+  assert.equal(regionOf("MX", "CDMX"), "ciudad de mexico");
+  assert.equal(regionOf("MX", "Estado de México"), "estado de mexico");
   assert.equal(regionOf("CL", "Constitución, Región VII"), "maule");
 });
 
@@ -125,7 +132,7 @@ test("Computrabajo: lee el listado HTML y el JSON-LD del aviso", () => {
       baseSalary: { value: { value: 3000000, unitText: "MONTH" } },
       hiringOrganization: { name: "ACTIVOS S A S" },
     })}</script>`;
-  const job = computrabajoJob("computrabajo-co", "sucre", items[0]!, detail);
+  const job = computrabajoJob("computrabajo-co", "Sucre", items[0]!, detail);
   assert.equal(job?.id, "computrabajo-co:74C2C0B04F7E027161373E686DCF3405");
   assert.equal(job?.country, "CO");
   assert.equal(job?.region, "sucre");
@@ -133,11 +140,11 @@ test("Computrabajo: lee el listado HTML y el JSON-LD del aviso", () => {
   assert.equal(job?.salary, 3000000);
   assert.equal(job?.description, "Funciones:\nAtención al cliente");
   assert.match(job!.url, /^https:\/\/co\.computrabajo\.com\/ofertas-de-trabajo\//);
-  assert.equal(computrabajoJob("computrabajo-co", "sucre", items[0]!, "<html>sin datos</html>"), null);
+  assert.equal(computrabajoJob("computrabajo-co", "Sucre", items[0]!, "<html>sin datos</html>"), null);
   // Sin JSON-LD, el aviso entra con lo que trae el HTML.
   const plain = `<h1>Asesor</h1><p class="fs16">Importante empresa del sector - Santa Marta, Magdalena</p>
     <div class="mb40" div-link="oferta"><div class="mbB"><span>A convenir</span></div><p class="mbB">Ruta de ventas.<br />Lunes a s&#xE1;bado</p></div>`;
-  const fromHtml = computrabajoJob("computrabajo-co", "magdalena", items[0]!, plain);
+  const fromHtml = computrabajoJob("computrabajo-co", "Magdalena", items[0]!, plain);
   assert.equal(fromHtml?.description, "Ruta de ventas.\nLunes a sábado");
   assert.equal(fromHtml?.company, null);
   assert.equal(fromHtml?.location, "Santa Marta, Magdalena");
@@ -145,7 +152,10 @@ test("Computrabajo: lee el listado HTML y el JSON-LD del aviso", () => {
   // Un href con entidades no se corta en el "#" de la entidad.
   const odd = parseListing(`<article data-id='AAAAAAAAAAAAAAAA1234'><a class="js-o-link" href="/ofertas-de-trabajo/oferta-348807&#x2B;bogot&#xE1;-AAAA#lc=x">T</a></article>`);
   assert.equal(odd[0]?.path, "/ofertas-de-trabajo/oferta-348807+bogot%C3%A1-AAAA");
-  assert.equal(computrabajoJob("computrabajo-co", "bogota-dc", items[0]!, detail)?.region, "bogota");
+  assert.equal(computrabajoJob("computrabajo-co", "Bogotá, D.C.", items[0]!, detail)?.region, "bogota");
+  // En Chile la región de Computrabajo cae en la misma clave que la de Laborum y Trabajando.
+  assert.equal(computrabajoJob("computrabajo-cl", "R.Metropolitana", items[0]!, detail)?.region, "metropolitana");
+  assert.equal(computrabajoJob("computrabajo-mx", "Nuevo León", items[0]!, detail)?.region, "nuevo leon");
   assert.equal(regionOf("CO", "Bogotá, D.C."), "bogota");
   assert.equal(countryOfPhone("+573001234567"), "CO");
 });
