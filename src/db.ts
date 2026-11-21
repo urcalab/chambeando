@@ -1,12 +1,14 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import type { Modality } from "./text.ts";
+import type { Country, Modality } from "./text.ts";
 
 export type Job = {
   id: string;
-  source: "laborum" | "trabajando";
+  /** El portal donde se publicó: laborum, bumeran, multitrabajos, konzerta, trabajando. */
+  source: string;
   source_id: string;
+  country: Country;
   url: string;
   title: string;
   company: string | null;
@@ -22,6 +24,7 @@ export type Job = {
 
 export type User = {
   phone: string;
+  country: Country;
   name: string | null;
   summary: string;
   roles: string[];
@@ -39,6 +42,7 @@ CREATE TABLE IF NOT EXISTS jobs (
   id TEXT PRIMARY KEY,
   source TEXT NOT NULL,
   source_id TEXT NOT NULL,
+  country TEXT NOT NULL,
   url TEXT NOT NULL,
   title TEXT NOT NULL,
   company TEXT,
@@ -52,10 +56,11 @@ CREATE TABLE IF NOT EXISTS jobs (
   first_seen_at TEXT NOT NULL,
   embedding BLOB
 );
-CREATE INDEX IF NOT EXISTS jobs_first_seen ON jobs(first_seen_at);
+CREATE INDEX IF NOT EXISTS jobs_country_seen ON jobs(country, first_seen_at);
 
 CREATE TABLE IF NOT EXISTS users (
   phone TEXT PRIMARY KEY,
+  country TEXT NOT NULL,
   name TEXT,
   summary TEXT NOT NULL,
   roles TEXT NOT NULL DEFAULT '[]',
@@ -111,6 +116,7 @@ type Row = Record<string, unknown>;
 export function rowToUser(r: Row): User {
   return {
     phone: r.phone as string,
+    country: r.country as Country,
     name: (r.name as string | null) ?? null,
     summary: r.summary as string,
     roles: JSON.parse(r.roles as string),

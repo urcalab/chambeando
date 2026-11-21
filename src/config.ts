@@ -17,7 +17,10 @@ export const config = {
     model: env.LLM_MODEL ?? "anthropic/claude-haiku-5.5",
   },
   ingestEveryMinutes: int(env.INGEST_EVERY_MINUTES, 60),
-  laborumMaxPages: int(env.LABORUM_MAX_PAGES, 5),
+  /** Sitios Jobint a recorrer (claves de JOBINT_SITES). */
+  jobintSites: (env.JOBINT_SITES ?? "laborum,bumeran-ar,bumeran-mx,bumeran-pe,multitrabajos,konzerta,bumeran-ve")
+    .split(",").map((s) => s.trim()).filter(Boolean),
+  jobintMaxPages: int(env.JOBINT_MAX_PAGES, 5),
   trabajandoMaxPages: int(env.TRABAJANDO_MAX_PAGES, 20),
   /** Avisos que se evalúan con el modelo por usuario en cada corrida. */
   candidatesPerUser: 8,

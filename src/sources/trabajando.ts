@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { fetchJson, sleep } from "./http.ts";
 import { modalityOf, regionKey, slugify, stripHtml } from "../text.ts";
+
+// Trabajando.com: solo el portal de Chile responde con esta API.
 import type { NewJob, Source } from "./types.ts";
 
 const Listed = z.object({
@@ -49,6 +51,7 @@ export function toJob(listedRaw: unknown, detailRaw: unknown): NewJob | null {
     id: `trabajando:${o.idOferta}`,
     source: "trabajando",
     source_id: String(o.idOferta),
+    country: "CL",
     url: `https://www.trabajando.cl/trabajo/${det?.slug ?? `${o.idOferta}-${slugify(o.nombreCargo)}`}`,
     title: o.nombreCargo.trim(),
     company,

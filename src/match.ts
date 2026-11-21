@@ -17,7 +17,7 @@ export function passesFilters(
   user: Pick<User, "regions" | "modalities" | "min_salary" | "exclude">,
   job: Pick<Job, "title" | "region" | "modality" | "salary">,
 ): boolean {
-  if (user.regions.length && job.region && job.modality !== "remoto" && !user.regions.includes(job.region)) {
+  if (user.regions.length && job.region && job.modality !== "remoto" && !regionMatches(user.regions, job.region)) {
     return false;
   }
   if (user.modalities.length && job.modality && !user.modalities.includes(job.modality)) return false;
@@ -25,6 +25,12 @@ export function passesFilters(
   const title = ` ${normalize(job.title)} `;
   if (user.exclude.some((x) => normalize(x) && title.includes(` ${normalize(x)} `))) return false;
   return true;
+}
+
+/** Igual, o una contiene a la otra: "lima" calza con "lima metropolitana". */
+function regionMatches(wanted: string[], region: string): boolean {
+  const r = ` ${region} `;
+  return wanted.some((w) => w === region || r.includes(` ${w} `) || ` ${w} `.includes(r));
 }
 
 export type Scored = { job: Job; score: number };
@@ -40,11 +46,11 @@ export function rank(
   const rows = db
     .prepare(
       `SELECT j.* FROM jobs j
-       WHERE j.first_seen_at > ? AND j.embedding IS NOT NULL
+       WHERE j.country = ? AND j.first_seen_at > ? AND j.embedding IS NOT NULL
          AND NOT EXISTS (SELECT 1 FROM deliveries d
                          WHERE d.phone = ? AND d.job_id = j.id AND d.status IN (${marks}))`,
     )
-    .all(opts.since ?? "", user.phone, ...opts.skipStatuses) as Array<Job & { embedding: Uint8Array }>;
+    .all(user.country, opts.since ?? "", user.phone, ...opts.skipStatuses) as Array<Job & { embedding: Uint8Array }>;
   const scored: Scored[] = [];
   for (const row of rows) {
     if (!passesFilters(user, row)) continue;

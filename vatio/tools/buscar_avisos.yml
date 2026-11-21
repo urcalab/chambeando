@@ -5,7 +5,7 @@ parameters:
   type: object
   properties:
     consulta: { type: string, description: "Qué buscar, si es distinto de sus preferencias guardadas." }
-    region: { type: string, enum: [arica, tarapaca, antofagasta, atacama, coquimbo, valparaiso, metropolitana, ohiggins, maule, nuble, biobio, araucania, los-rios, los-lagos, aysen, magallanes], description: "Solo para esta búsqueda." }
+    region: { type: string, description: "Región, provincia, estado o departamento, solo para esta búsqueda." }
 access: public
 request:
   method: POST

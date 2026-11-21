@@ -1,1 +1,1 @@
-Cercano y breve, en español de Chile, de tú. Mensajes cortos de WhatsApp, sin listas largas ni emojis de más.
+Cercano y breve, de tú, en un español que se entienda en toda Latinoamérica: sin modismos de un solo país, salvo los que use la persona. Mensajes cortos de WhatsApp, sin listas largas ni emojis de más.

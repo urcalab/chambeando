@@ -3,7 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import { config } from "./config.ts";
 import { now, rowToUser, type Job, type User } from "./db.ts";
 
-const money = (n: number) => `$${n.toLocaleString("es-CL")}`;
+const money = (n: number) => `$${n.toLocaleString("es-419")}`;
 
 const MODALITY_LABEL: Record<string, string | null> = { presencial: null, hibrido: "híbrido", remoto: "remoto" };
 

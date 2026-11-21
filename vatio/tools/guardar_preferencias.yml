@@ -4,18 +4,19 @@ when_to_use: La persona cuenta por primera vez qué busca, o cambia o precisa al
 parameters:
   type: object
   properties:
+    pais: { type: string, enum: [Chile, Argentina, México, Perú, Ecuador, Panamá, Venezuela], description: "Solo si dice que busca en un país distinto al de su número." }
     nombre: { type: string, description: "Su nombre, solo si lo dijo." }
     resumen: { type: string, description: "Qué busca y a qué se dedica, en una o dos frases con sus palabras. Obligatorio la primera vez." }
     cargos: { type: array, items: { type: string }, description: "Cargos a los que postularía, como 'analista contable'." }
     regiones:
       type: array
-      description: "Regiones donde busca. Vacío si le da lo mismo."
-      items: { type: string, enum: [arica, tarapaca, antofagasta, atacama, coquimbo, valparaiso, metropolitana, ohiggins, maule, nuble, biobio, araucania, los-rios, los-lagos, aysen, magallanes] }
+      description: "Región, provincia, estado o departamento donde busca, no la ciudad. Vacío si le da lo mismo."
+      items: { type: string }
     modalidades:
       type: array
       description: "Solo si pidió alguna modalidad en particular."
       items: { type: string, enum: [presencial, hibrido, remoto] }
-    sueldo_minimo: { type: integer, description: "Sueldo mensual mínimo en pesos, solo si lo dijo." }
+    sueldo_minimo: { type: integer, description: "Sueldo mensual mínimo en la moneda de su país, solo si lo dijo." }
     excluir: { type: array, items: { type: string }, description: "Lo que no quiere, como 'call center' o 'turnos de noche'." }
 access: public
 request:
@@ -25,6 +26,7 @@ request:
   timeout: 30
   body:
     phone: "$contact.phone_number"
+    pais:
     nombre:
     resumen:
     cargos:

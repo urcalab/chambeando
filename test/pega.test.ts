@@ -5,11 +5,11 @@ import type { Embedder } from "../src/embed.ts";
 import { parseVerdicts, type Judge } from "../src/llm.ts";
 import { matchAll, passesFilters } from "../src/match.ts";
 import { notifyAll, type Sender } from "../src/notify.ts";
-import { parseLaborumDate, toJob as laborumJob } from "../src/sources/laborum.ts";
+import { parseJobintDate, toJob as jobintJob } from "../src/sources/jobint.ts";
 import { toJob as trabajandoJob } from "../src/sources/trabajando.ts";
 import type { NewJob } from "../src/sources/types.ts";
 import { createTools } from "../src/tools.ts";
-import { modalityOf, normalizePhone, regionKey } from "../src/text.ts";
+import { countryOfPhone, modalityOf, normalizePhone, regionKey, regionOf } from "../src/text.ts";
 
 test("regionKey reconoce los formatos de los dos portales", () => {
   assert.equal(regionKey("Providencia, Región Metropolitana"), "metropolitana");
@@ -22,6 +22,16 @@ test("regionKey reconoce los formatos de los dos portales", () => {
   assert.equal(regionKey("los-rios"), "los-rios");
   assert.equal(regionKey("Madrid, Extranjero"), null);
   assert.equal(regionKey(null), null);
+});
+
+test("país por código del número y región fuera de Chile", () => {
+  assert.equal(countryOfPhone("+56911112222"), "CL");
+  assert.equal(countryOfPhone("+5491122223333"), "AR");
+  assert.equal(countryOfPhone("+5215512345678"), "MX");
+  assert.equal(countryOfPhone("+593991234567"), "EC");
+  assert.equal(countryOfPhone("+573001234567"), null);
+  assert.equal(regionOf("PE", "Cercado De Lima, Lima"), "lima");
+  assert.equal(regionOf("CL", "Constitución, Región VII"), "maule");
 });
 
 test("modalityOf", () => {
@@ -37,8 +47,8 @@ test("normalizePhone deja el mismo número con la misma clave", () => {
 });
 
 test("Laborum: convierte un aviso y descarta uno sin título", () => {
-  assert.equal(parseLaborumDate("20-11-2026 21:28:25"), "2026-11-20 21:28");
-  const job = laborumJob({
+  assert.equal(parseJobintDate("20-11-2026 21:28:25"), "2026-11-20 21:28");
+  const aviso = {
     id: 1118672242,
     titulo: "Técnico Educador Peluquería",
     detalle: "<p>Hola</p><p>Mundo</p>",
@@ -47,13 +57,22 @@ test("Laborum: convierte un aviso y descarta uno sin título", () => {
     modalidadTrabajo: "Presencial",
     tipoTrabajo: "Full-time",
     fechaHoraPublicacion: "20-11-2026 21:28:25",
-  });
+  };
+  const job = jobintJob(aviso, "laborum");
   assert.equal(job?.id, "laborum:1118672242");
+  assert.equal(job?.country, "CL");
   assert.equal(job?.url, "https://www.laborum.cl/empleos/tecnico-educador-peluqueria-1118672242.html");
   assert.equal(job?.company, null);
   assert.equal(job?.region, "metropolitana");
   assert.equal(job?.description, "Hola\nMundo");
-  assert.equal(laborumJob({ id: 1 }), null);
+  assert.equal(jobintJob({ id: 1 }, "laborum"), null);
+  // El mismo formato en otro país: otro dominio, otro país y la provincia como región.
+  const ar = jobintJob({ ...aviso, localizacion: "Canning, Buenos Aires" }, "bumeran-ar");
+  assert.equal(ar?.id, "bumeran-ar:1118672242");
+  assert.equal(ar?.country, "AR");
+  assert.equal(ar?.source, "bumeran");
+  assert.equal(ar?.region, "buenos aires");
+  assert.match(ar!.url, /^https:\/\/www\.bumeran\.com\.ar\/empleos\//);
 });
 
 test("Trabajando: usa el detalle si viene y el listado si no", () => {
@@ -113,14 +132,15 @@ const fakeEmbed: Embedder = async (texts) =>
   });
 
 async function addJob(db: ReturnType<typeof openDb>, over: Partial<NewJob> & { id: string; title: string }, seenAt = now()) {
+  const country = over.country ?? "CL";
   const [vec] = await fakeEmbed([over.title], "passage");
   db.prepare(
-    `INSERT INTO jobs (id, source, source_id, url, title, company, location, region, modality, job_type, salary,
+    `INSERT INTO jobs (id, source, source_id, country, url, title, company, location, region, modality, job_type, salary,
                        description, published_at, first_seen_at, embedding)
-     VALUES (?, 'laborum', ?, ?, ?, ?, ?, ?, ?, NULL, ?, '', NULL, ?, ?)`,
+     VALUES (?, 'laborum', ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, '', NULL, ?, ?)`,
   ).run(
-    over.id, over.id, `https://x/${over.id}`, over.title, over.company ?? null, over.location ?? null,
-    over.region ?? "metropolitana", over.modality ?? null, over.salary ?? null, seenAt, toBlob(vec!),
+    over.id, over.id, country, `https://x/${over.id}`, over.title, over.company ?? null, over.location ?? null,
+    over.region === undefined ? (country === "CL" ? "metropolitana" : null) : over.region, over.modality ?? null, over.salary ?? null, seenAt, toBlob(vec!),
   );
 }
 
@@ -219,6 +239,21 @@ test("un aviso republicado con otro id se muestra una sola vez", async () => {
   const tools = createTools(db, fakeEmbed, null);
   const saved = await tools.guardar_preferencias({ phone: "+56900000009", resumen: "vendedor" });
   assert.equal(saved.avisos.length, 2);
+});
+
+test("cada persona solo recibe avisos de su país", async () => {
+  const db = openDb(":memory:");
+  await addJob(db, { id: "cl", title: "Vendedor Santiago" });
+  await addJob(db, { id: "ar1", title: "Vendedor Canning", country: "AR", region: "buenos aires" });
+  await addJob(db, { id: "ar2", title: "Vendedor Rosario", country: "AR", region: "santa fe" });
+  const tools = createTools(db, fakeEmbed, null);
+  const ar = await tools.guardar_preferencias({ phone: "+5491122223333", resumen: "vendedor", regiones: ["Buenos Aires"] });
+  assert.equal(ar.preferencias.pais, "Argentina");
+  assert.deepEqual(ar.avisos.map((a) => a.id), ["ar1"]);
+  // Un número de un país que no atendemos necesita decir dónde busca.
+  await assert.rejects(tools.guardar_preferencias({ phone: "+573001234567", resumen: "vendedor" }), /Países disponibles/);
+  const co = await tools.guardar_preferencias({ phone: "+573001234567", resumen: "vendedor", pais: "Chile" });
+  assert.deepEqual(co.avisos.map((a) => a.id), ["cl"]);
 });
 
 test("si el modelo falla, los avisos se reintentan en la próxima corrida", async () => {

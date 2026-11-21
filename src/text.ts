@@ -47,7 +47,6 @@ const REGIONS: Array<{ key: string; roman: string; names: string[] }> = [
   { key: "magallanes", roman: "XII", names: ["magallanes", "punta arenas"] },
 ];
 
-export const REGION_KEYS = REGIONS.map((r) => r.key);
 
 /**
  * La región de un texto como "Providencia, Región Metropolitana", "Región VII",
@@ -71,6 +70,40 @@ export function regionKey(text: string | null | undefined): string | null {
     }
   }
   return null;
+}
+
+export const COUNTRIES = { CL: "Chile", AR: "Argentina", MX: "México", PE: "Perú", EC: "Ecuador", PA: "Panamá", VE: "Venezuela" } as const;
+export type Country = keyof typeof COUNTRIES;
+
+const PHONE_PREFIX: Array<[string, Country]> = [
+  ["+593", "EC"], ["+507", "PA"], ["+56", "CL"], ["+54", "AR"], ["+52", "MX"], ["+51", "PE"], ["+58", "VE"],
+];
+
+/** El país de un número de WhatsApp por su código, o null si no atendemos ese país. */
+export function countryOfPhone(phone: string): Country | null {
+  return PHONE_PREFIX.find(([prefix]) => phone.startsWith(prefix))?.[1] ?? null;
+}
+
+/** Acepta el código ("MX") o el nombre ("México", "mexico"). */
+export function countryOf(text: string | null | undefined): Country | null {
+  const t = normalize(text ?? "");
+  if (!t) return null;
+  for (const [code, name] of Object.entries(COUNTRIES)) {
+    if (t === code.toLowerCase() || t === normalize(name)) return code as Country;
+  }
+  return null;
+}
+
+/**
+ * La región, provincia, estado o departamento de un lugar, en forma comparable.
+ * Chile tiene claves fijas porque sus dos portales la escriben distinto; en el resto
+ * es el texto después de la última coma, normalizado ("Canning, Buenos Aires" -> "buenos aires").
+ */
+export function regionOf(country: Country, location: string | null | undefined): string | null {
+  if (!location) return null;
+  if (country === "CL") return regionKey(location);
+  const parts = location.split(",");
+  return normalize(parts[parts.length - 1] ?? "") || null;
 }
 
 export type Modality = "presencial" | "hibrido" | "remoto";

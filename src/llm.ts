@@ -1,5 +1,6 @@
 import { config } from "./config.ts";
 import type { Job, User } from "./db.ts";
+import { COUNTRIES } from "./text.ts";
 
 export type Verdict = { ok: boolean; reason: string };
 export type PastFeedback = { title: string; useful: boolean; feedback: string | null };
@@ -9,11 +10,12 @@ export type Judge = (user: User, past: PastFeedback[], jobs: Job[]) => Promise<V
 
 export function buildPrompt(user: User, past: PastFeedback[], jobs: Job[]): string {
   const profile = [
+    `País: ${COUNTRIES[user.country]}`,
     `Lo que busca: ${user.summary}`,
     user.roles.length ? `Cargos: ${user.roles.join(", ")}` : "",
     user.regions.length ? `Regiones: ${user.regions.join(", ")}` : "Regiones: cualquiera",
     user.modalities.length ? `Modalidad: ${user.modalities.join(", ")}` : "",
-    user.min_salary ? `Sueldo líquido mínimo: $${user.min_salary}` : "",
+    user.min_salary ? `Sueldo mensual mínimo, en moneda local: ${user.min_salary}` : "",
     user.exclude.length ? `No quiere: ${user.exclude.join(", ")}` : "",
   ].filter(Boolean);
   const history = past.map(
@@ -28,7 +30,7 @@ export function buildPrompt(user: User, past: PastFeedback[], jobs: Job[]): stri
     ].join("\n"),
   );
   return [
-    "Eres el filtro de un servicio que avisa por WhatsApp de ofertas de trabajo en Chile.",
+    "Eres el filtro de un servicio que avisa por WhatsApp de ofertas de trabajo en Latinoamérica.",
     "Una persona recibe pocos avisos al día, así que solo debe llegarle uno si de verdad postularía:",
     "el cargo corresponde a su profesión y nivel, y nada de lo que pidió excluir aparece.",
     "Ante la duda, no sirve. Que el aviso no informe sueldo o modalidad no lo descarta.",

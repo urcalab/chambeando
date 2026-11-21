@@ -19,9 +19,9 @@ export async function ingest(
   const known = db.prepare("SELECT 1 FROM jobs WHERE id = ?");
   const insert = db.prepare(
     `INSERT OR IGNORE INTO jobs
-      (id, source, source_id, url, title, company, location, region, modality, job_type, salary,
+      (id, source, source_id, country, url, title, company, location, region, modality, job_type, salary,
        description, published_at, first_seen_at, embedding)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const report: IngestReport = {};
   for (const [name, { source, maxPages }] of Object.entries(sources)) {
@@ -31,7 +31,7 @@ export async function ingest(
       const seenAt = now();
       res.jobs.forEach((j, i) => {
         insert.run(
-          j.id, j.source, j.source_id, j.url, j.title, j.company, j.location, j.region, j.modality,
+          j.id, j.source, j.source_id, j.country, j.url, j.title, j.company, j.location, j.region, j.modality,
           j.job_type, j.salary, j.description, j.published_at, seenAt, toBlob(vectors[i]!),
         );
       });

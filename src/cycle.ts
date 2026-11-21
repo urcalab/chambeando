@@ -5,13 +5,16 @@ import { ingest } from "./ingest.ts";
 import { llmJudge } from "./llm.ts";
 import { matchAll } from "./match.ts";
 import { notifyAll, vatioSender } from "./notify.ts";
-import { laborum } from "./sources/laborum.ts";
+import { jobint } from "./sources/jobint.ts";
+import type { Source } from "./sources/types.ts";
 import { trabajando } from "./sources/trabajando.ts";
 
-export const sources = () => ({
-  laborum: { source: laborum, maxPages: config.laborumMaxPages },
-  trabajando: { source: trabajando, maxPages: config.trabajandoMaxPages },
-});
+export function sources(): Record<string, { source: Source; maxPages: number }> {
+  const all: Record<string, { source: Source; maxPages: number }> = {};
+  for (const key of config.jobintSites) all[key] = { source: jobint(key), maxPages: config.jobintMaxPages };
+  all.trabajando = { source: trabajando, maxPages: config.trabajandoMaxPages };
+  return all;
+}
 
 let running = false;
 

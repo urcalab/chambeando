@@ -6,7 +6,9 @@ import type { Embedder } from "./embed.ts";
 import type { Judge } from "./llm.ts";
 import { pastFeedback, rank, userText } from "./match.ts";
 import { markSent, pendingJobs } from "./notify.ts";
-import { REGION_KEYS, normalizePhone, regionKey, type Modality } from "./text.ts";
+import { COUNTRIES, countryOf, countryOfPhone, normalizePhone, regionOf, type Country, type Modality } from "./text.ts";
+
+const SUPPORTED = `Países disponibles: ${Object.values(COUNTRIES).join(", ")}.`;
 
 export class ToolError extends Error {
   status: number;
@@ -17,17 +19,15 @@ export class ToolError extends Error {
 }
 
 const Phone = z.string().transform(normalizePhone).refine((p) => p.length >= 9, "teléfono inválido");
-const Regions = z
-  .array(z.string())
-  .transform((list) => [...new Set(list.map((r) => regionKey(r)).filter((r): r is string => r !== null))]);
 const Modalities = z.array(z.enum(["presencial", "hibrido", "remoto"]));
 
 const Preferences = z.object({
   phone: Phone,
+  pais: z.string().optional(),
   nombre: z.string().trim().max(80).optional(),
   resumen: z.string().trim().min(3).max(1000).optional(),
   cargos: z.array(z.string().trim().min(1)).max(10).optional(),
-  regiones: Regions.optional(),
+  regiones: z.array(z.string().trim().min(1)).max(10).optional(),
   modalidades: Modalities.optional(),
   sueldo_minimo: z.number().int().nonnegative().nullable().optional(),
   excluir: z.array(z.string().trim().min(1)).max(20).optional(),
@@ -95,13 +95,20 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
     async guardar_preferencias(input: unknown) {
       const p = Preferences.parse(input);
       const old = getUser(db, p.phone);
+      // El país sale del código del número; `pais` lo cambia si la persona busca en otro.
+      const asked = p.pais ? countryOf(p.pais) : null;
+      if (p.pais && !asked) throw new ToolError(422, `Todavía no tenemos avisos de "${p.pais}". ${SUPPORTED}`);
+      const country: Country | null = asked ?? old?.country ?? countryOfPhone(p.phone);
+      if (!country) throw new ToolError(422, `Todavía no tenemos avisos del país de este número. ${SUPPORTED} Si busca en uno de esos, manda \`pais\`.`);
+      const regions = (list: string[]) => [...new Set(list.map((r) => regionOf(country, r)).filter((r): r is string => r !== null))];
       const summary = p.resumen ?? old?.summary;
       if (!summary) throw new ToolError(422, "Falta `resumen`: qué trabajo busca la persona, en sus palabras.");
       const next = {
         name: p.nombre ?? old?.name ?? null,
         summary,
         roles: p.cargos ?? old?.roles ?? [],
-        regions: p.regiones ?? old?.regions ?? [],
+        // Si cambió de país, las regiones anteriores ya no aplican.
+        regions: p.regiones ? regions(p.regiones) : old && old.country === country ? old.regions : [],
         modalities: (p.modalidades ?? old?.modalities ?? []) as Modality[],
         min_salary: p.sueldo_minimo !== undefined ? p.sueldo_minimo : (old?.min_salary ?? null),
         exclude: p.excluir ?? old?.exclude ?? [],
@@ -109,15 +116,15 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
       const [vector] = await embed([userText(next)], "query");
       const t = now();
       db.prepare(
-        `INSERT INTO users (phone, name, summary, roles, regions, modalities, min_salary, exclude, embedding,
+        `INSERT INTO users (phone, country, name, summary, roles, regions, modalities, min_salary, exclude, embedding,
                             active, matched_until, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
          ON CONFLICT (phone) DO UPDATE SET
-           name = excluded.name, summary = excluded.summary, roles = excluded.roles, regions = excluded.regions,
+           country = excluded.country, name = excluded.name, summary = excluded.summary, roles = excluded.roles, regions = excluded.regions,
            modalities = excluded.modalities, min_salary = excluded.min_salary, exclude = excluded.exclude,
            embedding = excluded.embedding, active = 1, updated_at = excluded.updated_at`,
       ).run(
-        p.phone, next.name, next.summary, JSON.stringify(next.roles), JSON.stringify(next.regions),
+        p.phone, country, next.name, next.summary, JSON.stringify(next.roles), JSON.stringify(next.regions),
         JSON.stringify(next.modalities), next.min_salary, JSON.stringify(next.exclude), toBlob(vector!), t, t, t,
       );
       const user = getUser(db, p.phone)!;
@@ -125,7 +132,7 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
         guardado: true,
         nuevo: !old,
         preferencias: {
-          resumen: user.summary, cargos: user.roles, regiones: user.regions,
+          pais: COUNTRIES[user.country], resumen: user.summary, cargos: user.roles, regiones: user.regions,
           modalidades: user.modalities, sueldo_minimo: user.min_salary, excluir: user.exclude,
         },
         avisos: await searchAndMark(user, vector!, true),
@@ -138,8 +145,8 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
         .object({ phone: Phone, consulta: z.string().trim().max(300).optional(), region: z.string().optional() })
         .parse(input);
       const user = requireUser(db, p.phone);
-      const region = p.region ? regionKey(p.region) : null;
-      if (p.region && !region) throw new ToolError(422, `No reconozco la región "${p.region}". Opciones: ${REGION_KEYS.join(", ")}.`);
+      const region = p.region ? regionOf(user.country, p.region) : null;
+      if (p.region && !region) throw new ToolError(422, `No reconozco "${p.region}" como región de ${COUNTRIES[user.country]}.`);
       const vector = p.consulta ? (await embed([p.consulta], "query"))[0]! : userVector(db, p.phone);
       const scoped = region ? { ...user, regions: [region] } : user;
       // Una consulta propia puede salirse del perfil a propósito, así que no se revisa contra él.
