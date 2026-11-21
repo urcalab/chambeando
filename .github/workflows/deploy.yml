@@ -70,6 +70,9 @@ jobs:
           # Entradas sin hash: SSHKit (Kamal) no entiende las de ssh-keyscan -H.
           ssh-keyscan -t ed25519,ecdsa,rsa "$DEPLOY_HOST" > ~/.ssh/known_hosts
 
+      - name: Verify SSH connection
+        run: ssh -o BatchMode=yes -o IdentitiesOnly=yes "root@$DEPLOY_HOST" echo ok
+
       - name: Deploy
         run: kamal deploy
 
