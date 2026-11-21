@@ -47,7 +47,9 @@ jobs:
         uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.3"
-      - run: gem install kamal -v "~> 2.7" --no-document
+      # La misma versión que Wave (backend/Gemfile.lock). Una más nueva exige reiniciar kamal-proxy, que comparten
+      # Vatio y Wave: subirla solo junto con ellos.
+      - run: gem install kamal -v 2.7.0 --no-document
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
