@@ -3,12 +3,15 @@
   "private": true,
   "license": "MIT",
   "type": "module",
-  "engines": { "node": ">=22.18" },
+  "engines": {
+    "node": ">=22.18"
+  },
   "scripts": {
     "start": "node src/server.ts",
     "ingest": "node src/cli.ts ingest",
     "run-once": "node src/cli.ts run",
-    "test": "node --test test/*.test.ts"
+    "test": "node --test test/*.test.ts",
+    "prepare": "git config core.hooksPath .githooks 2>/dev/null || true"
   },
   "dependencies": {
     "@huggingface/transformers": "^3.7.0",

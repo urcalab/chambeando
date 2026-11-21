@@ -77,7 +77,8 @@ del agente en `WHATSAPP_NUMBER`, al final del archivo; mientras esté vacío dic
 ## Despliegue
 
 Corre en un droplet compartido, detrás de kamal-proxy y Cloudflare, en https://chambeando.urcalab.com.
-`.github/workflows/deploy.yml` corre los tests y despliega con Kamal en cada push a main que toque el backend.
+`.github/workflows/deploy.yml` solo despliega, con Kamal, en cada push a main que toque el backend. Los tests corren
+antes, en tu máquina: `npm install` activa el hook `.githooks/pre-push`, que corre `npm test` y frena el push si falla.
 Necesita tres secretos del repositorio: `OP_SERVICE_ACCOUNT_TOKEN` (lee `.kamal/secrets` desde 1Password),
 `SSH_PRIVATE_KEY` y `DEPLOY_HOST` (la IP del droplet, que no va en el repositorio).
 
