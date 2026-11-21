@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { now, openDb, toBlob } from "../src/db.ts";
+import { dedupeKey, ingest, localityOf, sameLocality } from "../src/ingest.ts";
 import type { Embedder } from "../src/embed.ts";
 import { parseVerdicts, type Judge } from "../src/llm.ts";
 import { matchAll, passesFilters } from "../src/match.ts";
@@ -359,6 +360,58 @@ test("perfil: primer trabajo, estudios y tipo de trabajo se guardan y filtran", 
   assert.equal(wider.preferencias.estudios, "Técnico en administración, último año");
   assert.deepEqual(wider.avisos.map((a) => a.id), ["f1"]);
   await assert.rejects(tools.guardar_preferencias({ phone, tipos: ["freelance"] }));
+});
+
+test("duplicados: el mismo aviso en dos portales o republicado se guarda una vez como original", async () => {
+  const base = {
+    source: "bumeran", country: "PE" as const, url: "https://x", location: "Miraflores, Lima", region: "lima",
+    modality: null, job_type: "Full-time", salary: null, published_at: null,
+  };
+  const a = { ...base, id: "bumeran-pe:1", source_id: "1", title: "Analista Contable", company: "Activos S.A.C.", description: "Texto A" };
+  // Otro portal: otro id, la empresa escrita distinto, el lugar en otro orden.
+  const b = { ...base, id: "computrabajo-pe:9", source_id: "9", source: "computrabajo", title: "ANALISTA CONTABLE", company: "ACTIVOS S A C", location: "Lima, Miraflores", description: "Texto B" };
+  const other = { ...base, id: "bumeran-pe:2", source_id: "2", title: "Analista Contable", company: "Otra Empresa", description: "Texto C" };
+  const arequipa = { ...base, id: "bumeran-pe:3", source_id: "3", title: "Analista Contable", company: "Activos S.A.C.", region: "arequipa", description: "Texto D" };
+  // Confidenciales: mismo título, pero solo son el mismo aviso si el texto coincide.
+  const conf1 = { ...base, id: "bumeran-pe:4", source_id: "4", title: "Vendedor", company: null, description: "Buscamos vendedor para tienda de ropa" };
+  const conf2 = { ...base, id: "computrabajo-pe:5", source_id: "5", title: "Vendedor", company: null, description: "Buscamos vendedor para tienda de ropa" };
+  const conf3 = { ...base, id: "bumeran-pe:6", source_id: "6", title: "Vendedor", company: null, description: "Ferretería requiere vendedor de mostrador" };
+  assert.equal(dedupeKey(a), dedupeKey(b));
+  assert.notEqual(dedupeKey(a), dedupeKey(other));
+  assert.notEqual(dedupeKey(a), dedupeKey(arequipa));
+  assert.equal(dedupeKey(conf1), dedupeKey(conf2));
+  assert.notEqual(dedupeKey(conf1), dedupeKey(conf3));
+
+  // La misma vacante en otra tienda de la misma región no es un duplicado.
+  const surco = { ...a, id: "bumeran-pe:10", source_id: "10", location: "Santiago de Surco, Lima" };
+  assert.equal(dedupeKey(a), dedupeKey(surco));
+  assert.deepEqual(localityOf(a), ["miraflores"]);
+  assert.deepEqual(localityOf(b), ["miraflores"]);
+  assert.equal(sameLocality(localityOf(a), localityOf(surco)), false);
+  assert.deepEqual(localityOf({ location: "R.Metropolitana, Santiago - Maipú", region: "metropolitana" }), ["maipu", "santiago"]);
+  assert.equal(sameLocality(["maipu"], ["maipu", "santiago"]), true);
+  assert.equal(sameLocality(["maipu"], []), true);
+
+  const db = openDb(":memory:");
+  const source = (jobs: NewJob[]) => async () => ({ jobs, pages: 1, invalid: 0 });
+  const first = await ingest(db, fakeEmbed, { "bumeran-pe": { source: source([a, other, arequipa, conf1, conf3, surco]), maxPages: 1 } });
+  assert.deepEqual([first["bumeran-pe"]!.added, first["bumeran-pe"]!.duplicates], [6, 0]);
+  // Una corrida posterior de otro portal trae dos repetidos y, además, el mismo aviso dos veces en su propio lote.
+  const fresh = { ...base, id: "computrabajo-pe:7", source_id: "7", source: "computrabajo", title: "Diseñador", company: "Estudio", description: "x" };
+  const freshAgain = { ...fresh, id: "computrabajo-pe:8", source_id: "8" };
+  const second = await ingest(db, fakeEmbed, { "computrabajo-pe": { source: source([b, conf2, fresh, freshAgain]), maxPages: 1 } });
+  assert.deepEqual([second["computrabajo-pe"]!.added, second["computrabajo-pe"]!.duplicates], [1, 3]);
+  const dup = db.prepare("SELECT duplicate_of, embedding FROM jobs WHERE id = ?").get("computrabajo-pe:9") as any;
+  assert.equal(dup.duplicate_of, "bumeran-pe:1");
+  assert.equal(dup.embedding, null);
+
+  // A la persona le llega una sola vez, aunque el duplicado haya llegado después de su registro.
+  const tools = createTools(db, fakeEmbed, null);
+  const saved = await tools.guardar_preferencias({ phone: "+51987000111", resumen: "contador analista" });
+  const ids = saved.avisos.map((x) => x.id);
+  assert.ok(ids.includes("bumeran-pe:1"));
+  assert.ok(!ids.includes("computrabajo-pe:9"));
+  assert.equal(new Set(ids).size, ids.length);
 });
 
 test("si el modelo falla, los avisos se reintentan en la próxima corrida", async () => {

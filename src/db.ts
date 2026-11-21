@@ -60,8 +60,14 @@ CREATE TABLE IF NOT EXISTS jobs (
   description TEXT NOT NULL,
   published_at TEXT,
   first_seen_at TEXT NOT NULL,
-  embedding BLOB
+  embedding BLOB,
+  -- Huella del aviso (ver dedupeKey). Si otro aviso con la misma huella llegó antes,
+  -- duplicate_of apunta a ese y este no se ofrece a nadie.
+  dedupe_key TEXT,
+  locality TEXT,
+  duplicate_of TEXT
 );
+CREATE INDEX IF NOT EXISTS jobs_dedupe ON jobs(dedupe_key);
 CREATE INDEX IF NOT EXISTS jobs_country_seen ON jobs(country, first_seen_at);
 
 CREATE TABLE IF NOT EXISTS users (

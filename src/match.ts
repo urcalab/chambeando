@@ -58,7 +58,7 @@ export function rank(
   const rows = db
     .prepare(
       `SELECT j.* FROM jobs j
-       WHERE j.country = ? AND j.first_seen_at > ? AND j.embedding IS NOT NULL
+       WHERE j.country = ? AND j.first_seen_at > ? AND j.duplicate_of IS NULL AND j.embedding IS NOT NULL
          AND NOT EXISTS (SELECT 1 FROM deliveries d
                          WHERE d.phone = ? AND d.job_id = j.id AND d.status IN (${marks}))`,
     )

@@ -40,6 +40,14 @@ La primera corrida trae solo la primera página de cada región (unos 20 avisos)
   cerrada, una plantilla como máximo al día y los avisos esperan a que la persona responda.
 - **Herramientas del agente** (`src/tools.ts`, `vatio/tools`): `POST /tools/<nombre>` con Bearer `BACKEND_API_KEY`.
 
+## Duplicados
+
+El mismo aviso puede estar en dos portales o republicarse con otro id. Al guardar, cada aviso recibe una
+huella (`dedupeKey` en `src/ingest.ts`): país, cargo, empresa sin forma societaria y región; si la empresa
+es confidencial, el comienzo de la descripción en su lugar. Dos avisos con la misma huella y una localidad en
+común son el mismo: el primero queda como original y los demás se guardan con `duplicate_of`, sin embedding,
+y nunca se ofrecen. La misma vacante en dos comunas distintas cuenta como dos avisos.
+
 ## Perfil de cada persona
 
 El agente lo arma conversando y lo guarda con `guardar_preferencias`: qué busca, estudios, si es su primer
