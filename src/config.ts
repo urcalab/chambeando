@@ -21,6 +21,10 @@ export const config = {
   jobintSites: (env.JOBINT_SITES ?? "laborum,bumeran-ar,bumeran-mx,bumeran-pe,multitrabajos,konzerta,bumeran-ve")
     .split(",").map((s) => s.trim()).filter(Boolean),
   jobintMaxPages: int(env.JOBINT_MAX_PAGES, 5),
+  /** Sitios Computrabajo a recorrer (claves de COMPUTRABAJO_SITES). */
+  computrabajoSites: (env.COMPUTRABAJO_SITES ?? "computrabajo-co").split(",").map((s) => s.trim()).filter(Boolean),
+  /** Páginas de 20 avisos por región en cada corrida. */
+  computrabajoMaxPages: int(env.COMPUTRABAJO_MAX_PAGES, 3),
   trabajandoMaxPages: int(env.TRABAJANDO_MAX_PAGES, 20),
   /** Avisos que se evalúan con el modelo por usuario en cada corrida. */
   candidatesPerUser: 8,

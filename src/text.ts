@@ -12,16 +12,19 @@ export function slugify(s: string): string {
   return normalize(s).replace(/ /g, "-");
 }
 
+const ENTITIES: Record<string, string> = { nbsp: " ", amp: "&", lt: "<", gt: ">", quot: '"', apos: "'" };
+
+/** Entidades HTML con nombre de uso común y todas las numéricas (&#xF3; &#243;). */
+export function decodeEntities(s: string): string {
+  return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (whole, code: string) => {
+    if (code[0] !== "#") return ENTITIES[code.toLowerCase()] ?? whole;
+    const n = code[1]!.toLowerCase() === "x" ? Number.parseInt(code.slice(2), 16) : Number.parseInt(code.slice(1), 10);
+    return Number.isFinite(n) && n > 0 && n <= 0x10ffff ? String.fromCodePoint(n) : whole;
+  });
+}
+
 export function stripHtml(html: string): string {
-  return html
-    .replace(/<(br|\/p|\/li|\/h\d)\s*\/?>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
+  return decodeEntities(html.replace(/<(br|\/p|\/li|\/h\d)\s*\/?>/gi, "\n").replace(/<[^>]+>/g, " "))
     .replace(/[ \t]+/g, " ")
     .replace(/ ?\n\s*/g, "\n")
     .trim();
@@ -72,11 +75,11 @@ export function regionKey(text: string | null | undefined): string | null {
   return null;
 }
 
-export const COUNTRIES = { CL: "Chile", AR: "Argentina", MX: "México", PE: "Perú", EC: "Ecuador", PA: "Panamá", VE: "Venezuela" } as const;
+export const COUNTRIES = { CL: "Chile", AR: "Argentina", MX: "México", CO: "Colombia", PE: "Perú", EC: "Ecuador", PA: "Panamá", VE: "Venezuela" } as const;
 export type Country = keyof typeof COUNTRIES;
 
 const PHONE_PREFIX: Array<[string, Country]> = [
-  ["+593", "EC"], ["+507", "PA"], ["+56", "CL"], ["+54", "AR"], ["+52", "MX"], ["+51", "PE"], ["+58", "VE"],
+  ["+593", "EC"], ["+507", "PA"], ["+56", "CL"], ["+57", "CO"], ["+54", "AR"], ["+52", "MX"], ["+51", "PE"], ["+58", "VE"],
 ];
 
 /** El país de un número de WhatsApp por su código, o null si no atendemos ese país. */
@@ -102,6 +105,8 @@ export function countryOf(text: string | null | undefined): Country | null {
 export function regionOf(country: Country, location: string | null | undefined): string | null {
   if (!location) return null;
   if (country === "CL") return regionKey(location);
+  // Computrabajo escribe "Bogotá, D.C.": la coma es parte del nombre del departamento.
+  if (country === "CO") return normalize(location.replace(/[,\s]\s*d\.?\s*c\.?\s*$/i, "")) || null;
   const parts = location.split(",");
   return normalize(parts[parts.length - 1] ?? "") || null;
 }

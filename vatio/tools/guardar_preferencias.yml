@@ -4,7 +4,7 @@ when_to_use: La persona cuenta por primera vez qué busca, o cambia o precisa al
 parameters:
   type: object
   properties:
-    pais: { type: string, enum: [Chile, Argentina, México, Perú, Ecuador, Panamá, Venezuela], description: "Solo si dice que busca en un país distinto al de su número." }
+    pais: { type: string, enum: [Argentina, Chile, Colombia, Ecuador, México, Panamá, Perú, Venezuela], description: "Solo si dice que busca en un país distinto al de su número." }
     nombre: { type: string, description: "Su nombre, solo si lo dijo." }
     resumen: { type: string, description: "Qué busca y a qué se dedica, en una o dos frases con sus palabras. Obligatorio la primera vez." }
     cargos: { type: array, items: { type: string }, description: "Cargos a los que postularía, como 'analista contable'." }

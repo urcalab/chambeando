@@ -5,6 +5,7 @@ import type { Embedder } from "../src/embed.ts";
 import { parseVerdicts, type Judge } from "../src/llm.ts";
 import { matchAll, passesFilters } from "../src/match.ts";
 import { notifyAll, type Sender } from "../src/notify.ts";
+import { parseListing, toJob as computrabajoJob } from "../src/sources/computrabajo.ts";
 import { parseJobintDate, toJob as jobintJob } from "../src/sources/jobint.ts";
 import { toJob as trabajandoJob } from "../src/sources/trabajando.ts";
 import type { NewJob } from "../src/sources/types.ts";
@@ -29,7 +30,7 @@ test("país por código del número y región fuera de Chile", () => {
   assert.equal(countryOfPhone("+5491122223333"), "AR");
   assert.equal(countryOfPhone("+5215512345678"), "MX");
   assert.equal(countryOfPhone("+593991234567"), "EC");
-  assert.equal(countryOfPhone("+573001234567"), null);
+  assert.equal(countryOfPhone("+5511912345678"), null);
   assert.equal(regionOf("PE", "Cercado De Lima, Lima"), "lima");
   assert.equal(regionOf("CL", "Constitución, Región VII"), "maule");
 });
@@ -102,6 +103,51 @@ test("Trabajando: usa el detalle si viene y el listado si no", () => {
   assert.equal(bare?.salary, null);
   // Sueldo oculto por la empresa: no se guarda.
   assert.equal(trabajandoJob(listed, { mostrarSueldo: false, sueldo: 5 })?.salary, null);
+});
+
+test("Computrabajo: lee el listado HTML y el JSON-LD del aviso", () => {
+  const listing = `<div><article class="box_offer" data-id='74C2C0B04F7E027161373E686DCF3405' id="x">
+    <h2><a class="js-o-link fc_base" href="/ofertas-de-trabajo/oferta-de-trabajo-de-asesor-74C2C0B04F7E027161373E686DCF3405#lc=ListOffers-Score-0">
+      Asesor / Atenci&#xF3;n al cliente </a></h2></article><article class="otro"><p>sin enlace</p></article></div>`;
+  const items = parseListing(listing);
+  assert.deepEqual(items, [{
+    id: "74C2C0B04F7E027161373E686DCF3405",
+    path: "/ofertas-de-trabajo/oferta-de-trabajo-de-asesor-74C2C0B04F7E027161373E686DCF3405",
+    title: "Asesor / Atención al cliente",
+  }]);
+  const detail = `<script type="application/ld+json">{"@type":"BreadcrumbList"}</script>
+    <script type="application/ld+json">${JSON.stringify({
+      "@type": "JobPosting",
+      description: "Funciones:<br/>Atenci&#243;n al cliente",
+      datePosted: "2026-11-21",
+      employmentType: "FULL_TIME",
+      jobLocation: { address: { addressLocality: "Sincelejo", addressRegion: "Sincelejo" } },
+      baseSalary: { value: { value: 3000000, unitText: "MONTH" } },
+      hiringOrganization: { name: "ACTIVOS S A S" },
+    })}</script>`;
+  const job = computrabajoJob("computrabajo-co", "sucre", items[0]!, detail);
+  assert.equal(job?.id, "computrabajo-co:74C2C0B04F7E027161373E686DCF3405");
+  assert.equal(job?.country, "CO");
+  assert.equal(job?.region, "sucre");
+  assert.equal(job?.location, "Sincelejo");
+  assert.equal(job?.salary, 3000000);
+  assert.equal(job?.description, "Funciones:\nAtención al cliente");
+  assert.match(job!.url, /^https:\/\/co\.computrabajo\.com\/ofertas-de-trabajo\//);
+  assert.equal(computrabajoJob("computrabajo-co", "sucre", items[0]!, "<html>sin datos</html>"), null);
+  // Sin JSON-LD, el aviso entra con lo que trae el HTML.
+  const plain = `<h1>Asesor</h1><p class="fs16">Importante empresa del sector - Santa Marta, Magdalena</p>
+    <div class="mb40" div-link="oferta"><div class="mbB"><span>A convenir</span></div><p class="mbB">Ruta de ventas.<br />Lunes a s&#xE1;bado</p></div>`;
+  const fromHtml = computrabajoJob("computrabajo-co", "magdalena", items[0]!, plain);
+  assert.equal(fromHtml?.description, "Ruta de ventas.\nLunes a sábado");
+  assert.equal(fromHtml?.company, null);
+  assert.equal(fromHtml?.location, "Santa Marta, Magdalena");
+  assert.equal(fromHtml?.region, "magdalena");
+  // Un href con entidades no se corta en el "#" de la entidad.
+  const odd = parseListing(`<article data-id='AAAAAAAAAAAAAAAA1234'><a class="js-o-link" href="/ofertas-de-trabajo/oferta-348807&#x2B;bogot&#xE1;-AAAA#lc=x">T</a></article>`);
+  assert.equal(odd[0]?.path, "/ofertas-de-trabajo/oferta-348807+bogot%C3%A1-AAAA");
+  assert.equal(computrabajoJob("computrabajo-co", "bogota-dc", items[0]!, detail)?.region, "bogota");
+  assert.equal(regionOf("CO", "Bogotá, D.C."), "bogota");
+  assert.equal(countryOfPhone("+573001234567"), "CO");
 });
 
 test("passesFilters solo descarta por lo que el aviso dice", () => {
@@ -251,8 +297,8 @@ test("cada persona solo recibe avisos de su país", async () => {
   assert.equal(ar.preferencias.pais, "Argentina");
   assert.deepEqual(ar.avisos.map((a) => a.id), ["ar1"]);
   // Un número de un país que no atendemos necesita decir dónde busca.
-  await assert.rejects(tools.guardar_preferencias({ phone: "+573001234567", resumen: "vendedor" }), /Países disponibles/);
-  const co = await tools.guardar_preferencias({ phone: "+573001234567", resumen: "vendedor", pais: "Chile" });
+  await assert.rejects(tools.guardar_preferencias({ phone: "+5511912345678", resumen: "vendedor" }), /Países disponibles/);
+  const co = await tools.guardar_preferencias({ phone: "+5511912345678", resumen: "vendedor", pais: "Chile" });
   assert.deepEqual(co.avisos.map((a) => a.id), ["cl"]);
 });
 

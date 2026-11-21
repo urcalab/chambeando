@@ -3,6 +3,16 @@ const UA =
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/** Pide una página HTML a un portal. */
+export async function fetchText(url: string): Promise<string> {
+  const res = await fetch(url, {
+    headers: { "user-agent": UA, accept: "text/html", "accept-language": "es" },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) throw new Error(`${url} respondió ${res.status}`);
+  return res.text();
+}
+
 /** Pide JSON a un portal. Falla con un mensaje claro si llega otra cosa (por ejemplo la página de Cloudflare). */
 export async function fetchJson(url: string, init: RequestInit = {}): Promise<unknown> {
   const res = await fetch(url, {
