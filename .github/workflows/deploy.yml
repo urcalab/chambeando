@@ -27,7 +27,7 @@ jobs:
   deploy:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
-    # Todo sale de 1Password: el único secreto del repositorio es OP_SERVICE_ACCOUNT_TOKEN, como en los otros repos.
+    # Todo sale del vault "DevOps Routines" de 1Password: el único secreto del repositorio es OP_SERVICE_ACCOUNT_TOKEN.
     env:
       OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
     steps:
@@ -65,7 +65,7 @@ jobs:
       - name: Set up SSH
         run: |
           install -m 700 -d ~/.ssh
-          op read "op://Vatio/id_ed25519/private key?ssh-format=openssh" > ~/.ssh/id_ed25519
+          op read "op://DevOps Routines/Droplet SSH/private key?ssh-format=openssh" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           # Entradas sin hash: SSHKit (Kamal) no entiende las de ssh-keyscan -H.
           ssh-keyscan -t ed25519,ecdsa,rsa "$DEPLOY_HOST" > ~/.ssh/known_hosts

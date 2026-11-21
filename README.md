@@ -80,7 +80,8 @@ Corre en un droplet compartido, detrás de kamal-proxy y Cloudflare, en https://
 `.github/workflows/deploy.yml` solo despliega, con Kamal, en cada push a main que toque el backend. Los tests corren
 antes, en tu máquina: `npm install` activa el hook `.githooks/pre-push`, que corre `npm test` y frena el push si falla.
 El único secreto del repositorio es `OP_SERVICE_ACCOUNT_TOKEN`: la clave SSH, los secretos de `.kamal/secrets` y
-el token para pedir la IP del droplet a DigitalOcean (la IP no va en el repositorio) salen de 1Password.
+el token para pedir la IP del droplet a DigitalOcean (la IP no va en el repositorio) salen del vault
+`DevOps Routines` de 1Password: `Droplet SSH`, `Docker Hub`, `Chambeano`, `OpenRouter` y `DigitalOcean`.
 
 El contenedor tiene un tope de 1 GB de RAM. Con el modelo de embeddings cargado y una ingesta en curso usa
 unos 780 MB.
