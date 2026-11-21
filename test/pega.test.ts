@@ -27,12 +27,11 @@ test("regionKey reconoce los formatos de los dos portales", () => {
 
 test("país por código del número y región fuera de Chile", () => {
   assert.equal(countryOfPhone("+56911112222"), "CL");
-  assert.equal(countryOfPhone("+5491122223333"), "AR");
+  assert.equal(countryOfPhone("+51987654321"), "PE");
+  // Argentina tiene conector, pero el servicio todavía no está abierto ahí.
+  assert.equal(countryOfPhone("+5491122223333"), null);
   assert.equal(countryOfPhone("+5215512345678"), "MX");
-  assert.equal(countryOfPhone("+593991234567"), "EC");
-  assert.equal(countryOfPhone("+59171234567"), "BO");
-  assert.equal(countryOfPhone("+18095551234"), "DO");
-  assert.equal(countryOfPhone("+50688887777"), "CR");
+  assert.equal(countryOfPhone("+593991234567"), null);
   assert.equal(countryOfPhone("+5511912345678"), null);
   assert.equal(regionOf("PE", "Cercado De Lima, Lima"), "lima");
   assert.equal(regionOf("MX", "Churubusco, Distrito Federal"), "ciudad de mexico");
@@ -300,12 +299,15 @@ test("un aviso republicado con otro id se muestra una sola vez", async () => {
 test("cada persona solo recibe avisos de su país", async () => {
   const db = openDb(":memory:");
   await addJob(db, { id: "cl", title: "Vendedor Santiago" });
-  await addJob(db, { id: "ar1", title: "Vendedor Canning", country: "AR", region: "buenos aires" });
-  await addJob(db, { id: "ar2", title: "Vendedor Rosario", country: "AR", region: "santa fe" });
+  await addJob(db, { id: "pe1", title: "Vendedor Miraflores", country: "PE", region: "lima" });
+  await addJob(db, { id: "pe2", title: "Vendedor Trujillo", country: "PE", region: "la libertad" });
   const tools = createTools(db, fakeEmbed, null);
-  const ar = await tools.guardar_preferencias({ phone: "+5491122223333", resumen: "vendedor", regiones: ["Buenos Aires"] });
-  assert.equal(ar.preferencias.pais, "Argentina");
-  assert.deepEqual(ar.avisos.map((a) => a.id), ["ar1"]);
+  const pe = await tools.guardar_preferencias({ phone: "+51987654321", resumen: "vendedor", regiones: ["Lima"] });
+  assert.equal(pe.preferencias.pais, "Perú");
+  assert.deepEqual(pe.avisos.map((a) => a.id), ["pe1"]);
+  // Un país con conector pero sin abrir: ni por número ni pidiéndolo.
+  await assert.rejects(tools.guardar_preferencias({ phone: "+5491122223333", resumen: "vendedor" }), /Países disponibles: Chile, México, Perú, Colombia/);
+  await assert.rejects(tools.guardar_preferencias({ phone: "+56911110000", resumen: "vendedor", pais: "Argentina" }), /Todavía no tenemos avisos/);
   // Un número de un país que no atendemos necesita decir dónde busca.
   await assert.rejects(tools.guardar_preferencias({ phone: "+5511912345678", resumen: "vendedor" }), /Países disponibles/);
   const co = await tools.guardar_preferencias({ phone: "+5511912345678", resumen: "vendedor", pais: "Chile" });

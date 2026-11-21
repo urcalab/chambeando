@@ -8,13 +8,20 @@ import { notifyAll, vatioSender } from "./notify.ts";
 import { COMPUTRABAJO_SITES, computrabajo } from "./sources/computrabajo.ts";
 import { jobint } from "./sources/jobint.ts";
 import type { Source } from "./sources/types.ts";
+import { JOBINT_SITES } from "./sources/jobint.ts";
 import { trabajando } from "./sources/trabajando.ts";
+import { isEnabled } from "./text.ts";
 
 export function sources(): Record<string, { source: Source; maxPages: number }> {
   const all: Record<string, { source: Source; maxPages: number }> = {};
-  for (const key of config.jobintSites) all[key] = { source: jobint(key), maxPages: config.jobintMaxPages };
-  for (const key of config.computrabajoSites ?? Object.keys(COMPUTRABAJO_SITES)) all[key] = { source: computrabajo(key), maxPages: config.computrabajoMaxPages };
-  all.trabajando = { source: trabajando, maxPages: config.trabajandoMaxPages };
+  // Solo se traen avisos de los países abiertos.
+  for (const key of config.jobintSites) {
+    if (isEnabled(JOBINT_SITES[key]!.country)) all[key] = { source: jobint(key), maxPages: config.jobintMaxPages };
+  }
+  for (const key of config.computrabajoSites ?? Object.keys(COMPUTRABAJO_SITES)) {
+    if (isEnabled(COMPUTRABAJO_SITES[key]!.country)) all[key] = { source: computrabajo(key), maxPages: config.computrabajoMaxPages };
+  }
+  if (isEnabled("CL")) all.trabajando = { source: trabajando, maxPages: config.trabajandoMaxPages };
   return all;
 }
 

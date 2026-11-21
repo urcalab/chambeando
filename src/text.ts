@@ -82,6 +82,17 @@ export const COUNTRIES = {
 } as const;
 export type Country = keyof typeof COUNTRIES;
 
+/**
+ * Países en que el servicio está abierto. Los conectores cubren más (todos los de COUNTRIES);
+ * abrir otro es agregarlo a la variable COUNTRIES del entorno.
+ */
+export const ENABLED_COUNTRIES: Country[] = (process.env.COUNTRIES ?? "CL,MX,PE,CO")
+  .split(",")
+  .map((c) => c.trim().toUpperCase())
+  .filter((c): c is Country => c in COUNTRIES);
+
+export const isEnabled = (country: Country) => ENABLED_COUNTRIES.includes(country);
+
 // Los prefijos más largos primero, para que +593 no se lea como +59x de otro país.
 const PHONE_PREFIX: Array<[string, Country]> = [
   ["+1809", "DO"], ["+1829", "DO"], ["+1849", "DO"],
@@ -92,15 +103,16 @@ const PHONE_PREFIX: Array<[string, Country]> = [
 
 /** El país de un número de WhatsApp por su código, o null si no atendemos ese país. */
 export function countryOfPhone(phone: string): Country | null {
-  return PHONE_PREFIX.find(([prefix]) => phone.startsWith(prefix))?.[1] ?? null;
+  const country = PHONE_PREFIX.find(([prefix]) => phone.startsWith(prefix))?.[1];
+  return country && isEnabled(country) ? country : null;
 }
 
-/** Acepta el código ("MX") o el nombre ("México", "mexico"). */
+/** Acepta el código ("MX") o el nombre ("México", "mexico") de un país abierto. */
 export function countryOf(text: string | null | undefined): Country | null {
   const t = normalize(text ?? "");
   if (!t) return null;
   for (const [code, name] of Object.entries(COUNTRIES)) {
-    if (t === code.toLowerCase() || t === normalize(name)) return code as Country;
+    if (t === code.toLowerCase() || t === normalize(name)) return isEnabled(code as Country) ? (code as Country) : null;
   }
   return null;
 }

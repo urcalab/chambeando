@@ -6,9 +6,9 @@ import type { Embedder } from "./embed.ts";
 import type { Judge } from "./llm.ts";
 import { pastFeedback, rank, userText } from "./match.ts";
 import { markSent, pendingJobs } from "./notify.ts";
-import { COUNTRIES, countryOf, countryOfPhone, normalizePhone, regionOf, type Country, type Modality } from "./text.ts";
+import { COUNTRIES, ENABLED_COUNTRIES, countryOf, countryOfPhone, normalizePhone, regionOf, type Country, type Modality } from "./text.ts";
 
-const SUPPORTED = `Países disponibles: ${Object.values(COUNTRIES).join(", ")}.`;
+const SUPPORTED = `Países disponibles: ${ENABLED_COUNTRIES.map((c) => COUNTRIES[c]).join(", ")}.`;
 
 export class ToolError extends Error {
   status: number;

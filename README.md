@@ -4,13 +4,17 @@ Un agente que busca trabajo por ti, por WhatsApp. La persona le cuenta a un agen
 este servicio trae cada hora los avisos nuevos de los portales, los cruza con cada persona y manda los que
 le sirven con el link para postular.
 
-| País | Portal |
+El servicio está abierto en **Chile, México, Perú y Colombia** (variable `COUNTRIES`):
+
+| País | Portales |
 |---|---|
-| Chile | Laborum, Trabajando |
-| Argentina, México, Perú, Venezuela | Bumeran |
-| Ecuador | Multitrabajos |
-| Panamá | Konzerta |
-| Los 17 países (Argentina, Bolivia, Chile, Colombia, Costa Rica, Ecuador, El Salvador, Guatemala, Honduras, México, Nicaragua, Panamá, Paraguay, Perú, República Dominicana, Uruguay, Venezuela) | Computrabajo |
+| Chile | Computrabajo, Laborum, Trabajando |
+| México | Computrabajo, Bumeran |
+| Perú | Computrabajo, Bumeran |
+| Colombia | Computrabajo |
+
+Los conectores ya cubren otros 13 países de Latinoamérica (Jobint en 7 y Computrabajo en 17); se abren
+agregando su código a `COUNTRIES`. Mientras no estén ahí, no se traen sus avisos ni se aceptan sus números.
 
 Laborum, Bumeran, Multitrabajos y Konzerta son la misma plataforma (Jobint) con otra marca: un solo conector,
 `src/sources/jobint.ts`. Agregar un país de esa plataforma es una línea en `JOBINT_SITES`. El país de cada
