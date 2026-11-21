@@ -73,3 +73,7 @@ Hugging Face la primera vez y usa unos 550 MB de RAM.
 
 `site/index.html` es una página estática, sin build. El botón de WhatsApp se activa poniendo el número
 del agente en `WHATSAPP_NUMBER`, al final del archivo; mientras esté vacío dice "Muy pronto".
+
+## Licencia
+
+MIT. El agente corre sobre [Vatio](https://vatio.ai).

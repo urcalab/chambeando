@@ -1,6 +1,7 @@
 {
   "name": "chambeando",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "engines": { "node": ">=22.18" },
   "scripts": {
