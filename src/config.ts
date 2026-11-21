@@ -4,10 +4,10 @@ const int = (v: string | undefined, d: number) => (v ? Number.parseInt(v, 10) : 
 export const config = {
   port: int(env.PORT, 8787),
   backendApiKey: env.BACKEND_API_KEY ?? "",
-  dbPath: env.DB_PATH ?? "data/pega.db",
+  dbPath: env.DB_PATH ?? "data/chambeando.db",
   vatio: {
     baseUrl: env.VATIO_BASE_URL ?? "https://vatio.ai",
-    workspace: env.VATIO_WORKSPACE ?? "pega",
+    workspace: env.VATIO_WORKSPACE ?? "chambeando",
     serverKey: env.VATIO_SERVER_KEY ?? "",
     template: env.VATIO_TEMPLATE ?? "nuevos_avisos",
   },

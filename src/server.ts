@@ -64,7 +64,7 @@ if (import.meta.main) {
   if (!config.backendApiKey) throw new Error("Falta BACKEND_API_KEY");
   const db = openDb(config.dbPath);
   createApp(db, localEmbedder, config.backendApiKey, config.llm.apiKey ? llmJudge : null).listen(config.port, () => {
-    console.log(`pega escuchando en :${config.port}`);
+    console.log(`chambeando escuchando en :${config.port}`);
   });
   const tick = () =>
     runCycle(db, localEmbedder)

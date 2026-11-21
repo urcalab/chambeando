@@ -1,8 +1,9 @@
-# pega
+# chambeando
 
-Un agente que busca trabajo por ti, por WhatsApp. La persona le cuenta a un agente (Vatio) qué busca;
-este servicio trae cada hora los avisos nuevos de los portales, los cruza con cada persona y manda los que
-le sirven con el link para postular.
+Chambeando (chambeando.app): un agente que busca chamba por ti, por WhatsApp, pensado para quien busca su
+primer trabajo, una práctica o algo part-time. La persona le cuenta a un agente (Vatio) qué estudia y qué busca;
+este servicio trae cada hora los avisos nuevos de los portales, los cruza con cada persona y manda los que le
+sirven con el link para postular.
 
 El servicio está abierto en **Chile, México, Perú y Colombia** (variable `COUNTRIES`):
 
@@ -33,11 +34,19 @@ La primera corrida trae solo la primera página de cada región (unos 20 avisos)
 
 - **Ingest** (`src/sources`, `src/ingest.ts`): pagina por fecha las APIs JSON de los portales hasta
   encontrar avisos ya guardados. Cada aviso se guarda en SQLite con su embedding.
-- **Match** (`src/match.ts`, `src/llm.ts`): por persona, filtros duros (país, región, modalidad, sueldo, exclusiones),
+- **Match** (`src/match.ts`, `src/llm.ts`): por persona, filtros duros (país, región, tipo de trabajo, modalidad, sueldo, exclusiones),
   los 8 avisos nuevos más parecidos por embedding y un modelo que decide cuáles valen un mensaje.
 - **Envío** (`src/notify.ts`): por la API de servidor de Vatio. Con la ventana de 24 h abierta va el texto;
   cerrada, una plantilla como máximo al día y los avisos esperan a que la persona responda.
 - **Herramientas del agente** (`src/tools.ts`, `vatio/tools`): `POST /tools/<nombre>` con Bearer `BACKEND_API_KEY`.
+
+## Perfil de cada persona
+
+El agente lo arma conversando y lo guarda con `guardar_preferencias`: qué busca, estudios, si es su primer
+trabajo, tipo de trabajo (`practica`, `part_time`, `full_time`), cargos, región, modalidad, sueldo mínimo y
+exclusiones. El tipo de trabajo es un filtro duro: se lee de la jornada del aviso y, para las prácticas, del
+título (`jobKind` en `src/text.ts`). A quien busca su primer trabajo, el modelo le descarta los avisos que piden
+más de un año de experiencia.
 
 ## Correr
 

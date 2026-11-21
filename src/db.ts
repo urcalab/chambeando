@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import type { Country, Modality } from "./text.ts";
+import type { Country, JobKind, Modality } from "./text.ts";
 
 export type Job = {
   id: string;
@@ -27,6 +27,12 @@ export type User = {
   country: Country;
   name: string | null;
   summary: string;
+  /** Qué estudió o estudia, si lo dijo. */
+  studies: string | null;
+  /** true si busca su primer trabajo; null si no lo ha dicho. */
+  first_job: boolean | null;
+  /** Tipos de trabajo que acepta; vacío si le da lo mismo. */
+  job_kinds: JobKind[];
   roles: string[];
   regions: string[];
   modalities: Modality[];
@@ -63,6 +69,9 @@ CREATE TABLE IF NOT EXISTS users (
   country TEXT NOT NULL,
   name TEXT,
   summary TEXT NOT NULL,
+  studies TEXT,
+  first_job INTEGER,
+  job_kinds TEXT NOT NULL DEFAULT '[]',
   roles TEXT NOT NULL DEFAULT '[]',
   regions TEXT NOT NULL DEFAULT '[]',
   modalities TEXT NOT NULL DEFAULT '[]',
@@ -119,6 +128,9 @@ export function rowToUser(r: Row): User {
     country: r.country as Country,
     name: (r.name as string | null) ?? null,
     summary: r.summary as string,
+    studies: (r.studies as string | null) ?? null,
+    first_job: r.first_job === null || r.first_job === undefined ? null : r.first_job === 1,
+    job_kinds: JSON.parse(r.job_kinds as string),
     roles: JSON.parse(r.roles as string),
     regions: JSON.parse(r.regions as string),
     modalities: JSON.parse(r.modalities as string),

@@ -146,6 +146,23 @@ export function modalityOf(text: string | null | undefined): Modality | null {
   return null;
 }
 
+export const JOB_KINDS = ["practica", "part_time", "full_time"] as const;
+export type JobKind = (typeof JOB_KINDS)[number];
+
+/**
+ * Qué tipo de trabajo es un aviso, por lo que dice su jornada y su título. null si no se sabe.
+ * El título manda para las prácticas: los portales suelen publicarlas como "Full-time".
+ */
+export function jobKind(jobType: string | null | undefined, title: string): JobKind | null {
+  if (/\b(practica|practicante|pasantia|pasante|becario|becaria|trainee|intern|internship)\b/.test(normalize(`${title} ${jobType ?? ""}`))) {
+    return "practica";
+  }
+  const t = normalize(jobType ?? "");
+  if (/part time|medio tiempo|media jornada|por horas|tiempo parcial/.test(t)) return "part_time";
+  if (/full time|jornada completa|tiempo completo/.test(t)) return "full_time";
+  return null;
+}
+
 /** Teléfono solo con dígitos y un + adelante, para que el mismo número sea siempre la misma clave. */
 export function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, "");

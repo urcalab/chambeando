@@ -1,5 +1,5 @@
 # guardar_preferencias
-description: Guarda o actualiza qué trabajo busca la persona y devuelve los avisos que ya calzan con eso.
+description: Guarda o actualiza el perfil de la persona (qué busca, estudios, si es su primer trabajo, tipo de trabajo, dónde) y devuelve los avisos que ya le sirven.
 when_to_use: La persona cuenta por primera vez qué busca, o cambia o precisa algo de lo que busca. Manda solo los campos que cambiaron.
 parameters:
   type: object
@@ -7,6 +7,12 @@ parameters:
     pais: { type: string, enum: [Chile, Colombia, México, Perú], description: "Solo si dice que busca en un país distinto al de su número." }
     nombre: { type: string, description: "Su nombre, solo si lo dijo." }
     resumen: { type: string, description: "Qué busca y a qué se dedica, en una o dos frases con sus palabras. Obligatorio la primera vez." }
+    estudios: { type: string, description: "Qué estudia o estudió y en qué va, como 'Diseño gráfico, tercer año'. Solo si lo dijo." }
+    primer_trabajo: { type: boolean, description: "true si busca su primera chamba; false si ya ha trabajado en lo suyo." }
+    tipos:
+      type: array
+      description: "Tipo de trabajo que busca. Vacío si le da lo mismo."
+      items: { type: string, enum: [practica, part_time, full_time] }
     cargos: { type: array, items: { type: string }, description: "Cargos a los que postularía, como 'analista contable'." }
     regiones:
       type: array
@@ -29,6 +35,9 @@ request:
     pais:
     nombre:
     resumen:
+    estudios:
+    primer_trabajo:
+    tipos:
     cargos:
     regiones:
     modalidades:

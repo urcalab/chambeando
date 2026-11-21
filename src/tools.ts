@@ -6,7 +6,7 @@ import type { Embedder } from "./embed.ts";
 import type { Judge } from "./llm.ts";
 import { pastFeedback, rank, userText } from "./match.ts";
 import { markSent, pendingJobs } from "./notify.ts";
-import { COUNTRIES, ENABLED_COUNTRIES, countryOf, countryOfPhone, normalizePhone, regionOf, type Country, type Modality } from "./text.ts";
+import { COUNTRIES, ENABLED_COUNTRIES, JOB_KINDS, countryOf, countryOfPhone, normalizePhone, regionOf, type Country, type JobKind, type Modality } from "./text.ts";
 
 const SUPPORTED = `Países disponibles: ${ENABLED_COUNTRIES.map((c) => COUNTRIES[c]).join(", ")}.`;
 
@@ -26,6 +26,9 @@ const Preferences = z.object({
   pais: z.string().optional(),
   nombre: z.string().trim().max(80).optional(),
   resumen: z.string().trim().min(3).max(1000).optional(),
+  estudios: z.string().trim().max(200).optional(),
+  primer_trabajo: z.boolean().optional(),
+  tipos: z.array(z.enum(JOB_KINDS)).optional(),
   cargos: z.array(z.string().trim().min(1)).max(10).optional(),
   regiones: z.array(z.string().trim().min(1)).max(10).optional(),
   modalidades: Modalities.optional(),
@@ -106,6 +109,9 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
       const next = {
         name: p.nombre ?? old?.name ?? null,
         summary,
+        studies: p.estudios ?? old?.studies ?? null,
+        first_job: p.primer_trabajo ?? old?.first_job ?? null,
+        job_kinds: (p.tipos ?? old?.job_kinds ?? []) as JobKind[],
         roles: p.cargos ?? old?.roles ?? [],
         // Si cambió de país, las regiones anteriores ya no aplican.
         regions: p.regiones ? regions(p.regiones) : old && old.country === country ? old.regions : [],
@@ -116,15 +122,17 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
       const [vector] = await embed([userText(next)], "query");
       const t = now();
       db.prepare(
-        `INSERT INTO users (phone, country, name, summary, roles, regions, modalities, min_salary, exclude, embedding,
+        `INSERT INTO users (phone, country, name, summary, studies, first_job, job_kinds, roles, regions, modalities, min_salary, exclude, embedding,
                             active, matched_until, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
          ON CONFLICT (phone) DO UPDATE SET
-           country = excluded.country, name = excluded.name, summary = excluded.summary, roles = excluded.roles, regions = excluded.regions,
+           country = excluded.country, name = excluded.name, summary = excluded.summary, studies = excluded.studies,
+           first_job = excluded.first_job, job_kinds = excluded.job_kinds, roles = excluded.roles, regions = excluded.regions,
            modalities = excluded.modalities, min_salary = excluded.min_salary, exclude = excluded.exclude,
            embedding = excluded.embedding, active = 1, updated_at = excluded.updated_at`,
       ).run(
-        p.phone, country, next.name, next.summary, JSON.stringify(next.roles), JSON.stringify(next.regions),
+        p.phone, country, next.name, next.summary, next.studies,
+        next.first_job === null ? null : next.first_job ? 1 : 0, JSON.stringify(next.job_kinds), JSON.stringify(next.roles), JSON.stringify(next.regions),
         JSON.stringify(next.modalities), next.min_salary, JSON.stringify(next.exclude), toBlob(vector!), t, t, t,
       );
       const user = getUser(db, p.phone)!;
@@ -132,7 +140,8 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
         guardado: true,
         nuevo: !old,
         preferencias: {
-          pais: COUNTRIES[user.country], resumen: user.summary, cargos: user.roles, regiones: user.regions,
+          pais: COUNTRIES[user.country], resumen: user.summary, estudios: user.studies,
+          primer_trabajo: user.first_job, tipos: user.job_kinds, cargos: user.roles, regiones: user.regions,
           modalidades: user.modalities, sueldo_minimo: user.min_salary, excluir: user.exclude,
         },
         avisos: await searchAndMark(user, vector!, true),

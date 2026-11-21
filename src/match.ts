@@ -3,10 +3,20 @@ import { config } from "./config.ts";
 import { fromBlob, now, rowToUser, type Job, type User } from "./db.ts";
 import { dot } from "./embed.ts";
 import type { Judge, PastFeedback } from "./llm.ts";
-import { normalize } from "./text.ts";
+import { jobKind, normalize } from "./text.ts";
 
-export function userText(u: Pick<User, "roles" | "summary">): string {
-  return [u.roles.join(", "), u.summary].filter(Boolean).join(". ");
+const KIND_WORDS = { practica: "práctica profesional", part_time: "part-time, medio tiempo", full_time: "tiempo completo" };
+
+export function userText(u: Pick<User, "roles" | "summary" | "studies" | "first_job" | "job_kinds">): string {
+  return [
+    u.roles.join(", "),
+    u.summary,
+    u.studies ? `Estudios: ${u.studies}` : "",
+    u.first_job ? "Primer trabajo, sin experiencia, junior" : "",
+    u.job_kinds.map((k) => KIND_WORDS[k]).join(", "),
+  ]
+    .filter(Boolean)
+    .join(". ");
 }
 
 /**
@@ -14,9 +24,11 @@ export function userText(u: Pick<User, "roles" | "summary">): string {
  * Un dato que el aviso no informa (región, modalidad, sueldo) no descarta.
  */
 export function passesFilters(
-  user: Pick<User, "regions" | "modalities" | "min_salary" | "exclude">,
-  job: Pick<Job, "title" | "region" | "modality" | "salary">,
+  user: Pick<User, "regions" | "modalities" | "min_salary" | "exclude" | "job_kinds">,
+  job: Pick<Job, "title" | "region" | "modality" | "salary" | "job_type">,
 ): boolean {
+  const kind = jobKind(job.job_type, job.title);
+  if (user.job_kinds.length && kind && !user.job_kinds.includes(kind)) return false;
   if (user.regions.length && job.region && job.modality !== "remoto" && !regionMatches(user.regions, job.region)) {
     return false;
   }

@@ -9,8 +9,9 @@ import { parseListing, toJob as computrabajoJob } from "../src/sources/computrab
 import { parseJobintDate, toJob as jobintJob } from "../src/sources/jobint.ts";
 import { toJob as trabajandoJob } from "../src/sources/trabajando.ts";
 import type { NewJob } from "../src/sources/types.ts";
+import type { JobKind } from "../src/text.ts";
 import { createTools } from "../src/tools.ts";
-import { countryOfPhone, modalityOf, normalizePhone, regionKey, regionOf } from "../src/text.ts";
+import { countryOfPhone, jobKind, modalityOf, normalizePhone, regionKey, regionOf } from "../src/text.ts";
 
 test("regionKey reconoce los formatos de los dos portales", () => {
   assert.equal(regionKey("Providencia, Región Metropolitana"), "metropolitana");
@@ -39,6 +40,20 @@ test("país por código del número y región fuera de Chile", () => {
   assert.equal(regionOf("MX", "CDMX"), "ciudad de mexico");
   assert.equal(regionOf("MX", "Estado de México"), "estado de mexico");
   assert.equal(regionOf("CL", "Constitución, Región VII"), "maule");
+});
+
+test("jobKind lee la jornada de los tres portales y las prácticas por el título", () => {
+  assert.equal(jobKind("Full-time", "Contador"), "full_time");
+  assert.equal(jobKind("FULL_TIME", "Contador"), "full_time");
+  assert.equal(jobKind("Jornada Completa", "Contador"), "full_time");
+  assert.equal(jobKind("Part Time", "Vendedor"), "part_time");
+  assert.equal(jobKind("Por Horas", "Vendedor"), "part_time");
+  assert.equal(jobKind("Práctica", "Diseño"), "practica");
+  assert.equal(jobKind("Full-time", "Practicante de Marketing"), "practica");
+  assert.equal(jobKind("FULL_TIME", "Becario de sistemas"), "practica");
+  assert.equal(jobKind(null, "Contador"), null);
+  // "Buenas prácticas" en el título no lo convierte en una práctica.
+  assert.equal(jobKind("Full-time", "Jefe de buenas practicas"), "full_time");
 });
 
 test("modalityOf", () => {
@@ -160,8 +175,8 @@ test("Computrabajo: lee el listado HTML y el JSON-LD del aviso", () => {
 });
 
 test("passesFilters solo descarta por lo que el aviso dice", () => {
-  const user = { regions: ["metropolitana"], modalities: [], min_salary: 900000, exclude: ["call center"] };
-  const job = { title: "Contador", region: "metropolitana", modality: null, salary: null };
+  const user = { regions: ["metropolitana"], modalities: [], min_salary: 900000, exclude: ["call center"], job_kinds: [] as JobKind[] };
+  const job = { title: "Contador", region: "metropolitana", modality: null, salary: null, job_type: null as string | null };
   assert.equal(passesFilters(user, job), true);
   assert.equal(passesFilters(user, { ...job, region: "biobio" }), false);
   assert.equal(passesFilters(user, { ...job, region: "biobio", modality: "remoto" }), true);
@@ -169,6 +184,12 @@ test("passesFilters solo descarta por lo que el aviso dice", () => {
   assert.equal(passesFilters(user, { ...job, salary: 600000 }), false);
   assert.equal(passesFilters(user, { ...job, title: "Ejecutivo Call Center" }), false);
   assert.equal(passesFilters({ ...user, modalities: ["remoto"] }, { ...job, modality: "presencial" }), false);
+  // Tipo de trabajo: quien busca práctica no recibe empleos de jornada completa, y al revés.
+  const intern = { ...user, job_kinds: ["practica"] as JobKind[] };
+  assert.equal(passesFilters(intern, { ...job, job_type: "Full-time" }), false);
+  assert.equal(passesFilters(intern, { ...job, title: "Práctica contabilidad", job_type: "Full-time" }), true);
+  assert.equal(passesFilters(intern, job), true);
+  assert.equal(passesFilters({ ...user, job_kinds: ["full_time", "part_time"] }, { ...job, title: "Practicante de finanzas" }), false);
 });
 
 test("parseVerdicts tolera texto alrededor del JSON y avisos que faltan", () => {
@@ -192,10 +213,10 @@ async function addJob(db: ReturnType<typeof openDb>, over: Partial<NewJob> & { i
   db.prepare(
     `INSERT INTO jobs (id, source, source_id, country, url, title, company, location, region, modality, job_type, salary,
                        description, published_at, first_seen_at, embedding)
-     VALUES (?, 'laborum', ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, '', NULL, ?, ?)`,
+     VALUES (?, 'laborum', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', NULL, ?, ?)`,
   ).run(
     over.id, over.id, country, `https://x/${over.id}`, over.title, over.company ?? null, over.location ?? null,
-    over.region === undefined ? (country === "CL" ? "metropolitana" : null) : over.region, over.modality ?? null, over.salary ?? null, seenAt, toBlob(vec!),
+    over.region === undefined ? (country === "CL" ? "metropolitana" : null) : over.region, over.modality ?? null, over.job_type ?? null, over.salary ?? null, seenAt, toBlob(vec!),
   );
 }
 
@@ -312,6 +333,32 @@ test("cada persona solo recibe avisos de su país", async () => {
   await assert.rejects(tools.guardar_preferencias({ phone: "+5511912345678", resumen: "vendedor" }), /Países disponibles/);
   const co = await tools.guardar_preferencias({ phone: "+5511912345678", resumen: "vendedor", pais: "Chile" });
   assert.deepEqual(co.avisos.map((a) => a.id), ["cl"]);
+});
+
+test("perfil: primer trabajo, estudios y tipo de trabajo se guardan y filtran", async () => {
+  const db = openDb(":memory:");
+  await addJob(db, { id: "p1", title: "Práctica vendedor tienda" });
+  await addJob(db, { id: "f1", title: "Vendedor senior", job_type: "Full-time" });
+  let seen: any = null;
+  const tools = createTools(db, fakeEmbed, async (u, _p, jobs) => {
+    seen = u;
+    return jobs.map(() => ({ ok: true, reason: "" }));
+  });
+  const phone = "+56922223333";
+  const saved = await tools.guardar_preferencias({
+    phone, resumen: "quiero trabajar de vendedor", estudios: "Técnico en administración, último año",
+    primer_trabajo: true, tipos: ["practica"],
+  });
+  assert.deepEqual(saved.avisos.map((a) => a.id), ["p1"]);
+  assert.equal(saved.preferencias.primer_trabajo, true);
+  assert.deepEqual(saved.preferencias.tipos, ["practica"]);
+  assert.equal(seen.first_job, true);
+  assert.equal(seen.studies, "Técnico en administración, último año");
+  // Cambiar solo el tipo conserva lo demás y abre los avisos de jornada completa.
+  const wider = await tools.guardar_preferencias({ phone, tipos: ["practica", "full_time"] });
+  assert.equal(wider.preferencias.estudios, "Técnico en administración, último año");
+  assert.deepEqual(wider.avisos.map((a) => a.id), ["f1"]);
+  await assert.rejects(tools.guardar_preferencias({ phone, tipos: ["freelance"] }));
 });
 
 test("si el modelo falla, los avisos se reintentan en la próxima corrida", async () => {
