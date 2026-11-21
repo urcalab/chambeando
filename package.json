@@ -1,0 +1,16 @@
+{
+  "name": "pega",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=22.18" },
+  "scripts": {
+    "start": "node src/server.ts",
+    "ingest": "node src/cli.ts ingest",
+    "run-once": "node src/cli.ts run",
+    "test": "node --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.7.0",
+    "zod": "^3.25.0"
+  }
+}

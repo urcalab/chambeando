@@ -1,0 +1,13 @@
+# borrar_mis_datos
+description: Borra todo lo que guardamos de la persona. No se puede deshacer.
+when_to_use: La persona pide borrar sus datos y ya lo confirmó.
+parameters:
+  type: object
+  properties: {}
+access: public
+request:
+  method: POST
+  path: /tools/borrar_mis_datos
+  requires: [contact.phone_number]
+  body:
+    phone: "$contact.phone_number"

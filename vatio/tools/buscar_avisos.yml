@@ -1,0 +1,21 @@
+# buscar_avisos
+description: Busca avisos de trabajo vigentes para la persona, según lo que tiene guardado.
+when_to_use: La persona pide ver avisos o pregunta si hay algo. Usa consulta solo si pide algo distinto de lo guardado.
+parameters:
+  type: object
+  properties:
+    consulta: { type: string, description: "Qué buscar, si es distinto de sus preferencias guardadas." }
+    region: { type: string, enum: [arica, tarapaca, antofagasta, atacama, coquimbo, valparaiso, metropolitana, ohiggins, maule, nuble, biobio, araucania, los-rios, los-lagos, aysen, magallanes], description: "Solo para esta búsqueda." }
+access: public
+request:
+  method: POST
+  path: /tools/buscar_avisos
+  requires: [contact.phone_number]
+  timeout: 30
+  body:
+    phone: "$contact.phone_number"
+    consulta:
+    region:
+respond:
+  message:
+    when_empty: No hay avisos nuevos que calcen por ahora.

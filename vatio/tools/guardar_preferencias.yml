@@ -1,0 +1,34 @@
+# guardar_preferencias
+description: Guarda o actualiza qué trabajo busca la persona y devuelve los avisos que ya calzan con eso.
+when_to_use: La persona cuenta por primera vez qué busca, o cambia o precisa algo de lo que busca. Manda solo los campos que cambiaron.
+parameters:
+  type: object
+  properties:
+    nombre: { type: string, description: "Su nombre, solo si lo dijo." }
+    resumen: { type: string, description: "Qué busca y a qué se dedica, en una o dos frases con sus palabras. Obligatorio la primera vez." }
+    cargos: { type: array, items: { type: string }, description: "Cargos a los que postularía, como 'analista contable'." }
+    regiones:
+      type: array
+      description: "Regiones donde busca. Vacío si le da lo mismo."
+      items: { type: string, enum: [arica, tarapaca, antofagasta, atacama, coquimbo, valparaiso, metropolitana, ohiggins, maule, nuble, biobio, araucania, los-rios, los-lagos, aysen, magallanes] }
+    modalidades:
+      type: array
+      description: "Solo si pidió alguna modalidad en particular."
+      items: { type: string, enum: [presencial, hibrido, remoto] }
+    sueldo_minimo: { type: integer, description: "Sueldo mensual mínimo en pesos, solo si lo dijo." }
+    excluir: { type: array, items: { type: string }, description: "Lo que no quiere, como 'call center' o 'turnos de noche'." }
+access: public
+request:
+  method: POST
+  path: /tools/guardar_preferencias
+  requires: [contact.phone_number]
+  timeout: 30
+  body:
+    phone: "$contact.phone_number"
+    nombre:
+    resumen:
+    cargos:
+    regiones:
+    modalidades:
+    sueldo_minimo:
+    excluir:

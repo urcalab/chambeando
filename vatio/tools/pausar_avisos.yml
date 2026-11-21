@@ -1,0 +1,16 @@
+# pausar_avisos
+description: Pausa o reanuda los avisos automáticos de trabajo.
+when_to_use: La persona pide que no le escribamos más, dice que ya encontró trabajo, o pide volver a recibir avisos.
+parameters:
+  type: object
+  properties:
+    pausar: { type: boolean, description: "true para pausar, false para reanudar." }
+  required: [pausar]
+access: public
+request:
+  method: POST
+  path: /tools/pausar_avisos
+  requires: [contact.phone_number]
+  body:
+    phone: "$contact.phone_number"
+    pausar:

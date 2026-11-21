@@ -1,0 +1,13 @@
+# avisos_pendientes
+description: Entrega los avisos nuevos que encontramos para la persona y que todavía no ha visto.
+when_to_use: La persona responde a un mensaje que le anunciaba avisos nuevos.
+parameters:
+  type: object
+  properties: {}
+access: public
+request:
+  method: POST
+  path: /tools/avisos_pendientes
+  requires: [contact.phone_number]
+  body:
+    phone: "$contact.phone_number"
