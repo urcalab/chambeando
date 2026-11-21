@@ -2,26 +2,31 @@ import { createHash } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { config } from "./config.ts";
 import { now, rowToUser, type Job, type User } from "./db.ts";
+import { jobLink, linkToken } from "./feedback.ts";
 
 const money = (n: number) => `$${n.toLocaleString("es-419")}`;
 
 const MODALITY_LABEL: Record<string, string | null> = { presencial: null, hibrido: "híbrido", remoto: "remoto" };
 
-export function formatJob(j: Job, n?: number): string {
+export function formatJob(j: Job, link: string, n?: number): string {
   const place = [j.company, j.location, MODALITY_LABEL[j.modality ?? "presencial"]].filter(Boolean).join(" · ");
   return [
     `${n ? `${n}. ` : ""}*${j.title}*`,
     place,
     j.salary ? `Sueldo: ${money(j.salary)}` : null,
-    j.url,
+    link,
   ]
     .filter(Boolean)
     .join("\n");
 }
 
-export function formatMessage(jobs: Job[]): string {
+export function formatMessage(jobs: Job[], phone: string): string {
   const head = jobs.length === 1 ? "Encontré un aviso nuevo para ti:" : `Encontré ${jobs.length} avisos nuevos para ti:`;
-  return [head, ...jobs.map((j, i) => formatJob(j, i + 1)), "Si alguno no te sirve, dime cuál y por qué, y afino la búsqueda."].join("\n\n");
+  return [
+    head,
+    ...jobs.map((j, i) => formatJob(j, jobLink(phone, j), i + 1)),
+    "¿Te sirve alguno? Respóndeme con el número, o dime cuál no y por qué, y afino la búsqueda.",
+  ].join("\n\n");
 }
 
 export type SendResult = "sent" | "template" | "outside_window" | "failed";
@@ -96,17 +101,17 @@ export function pendingJobs(db: DatabaseSync, phone: string, limit: number): Job
 
 export function markSent(db: DatabaseSync, phone: string, jobIds: string[]): void {
   const stmt = db.prepare(
-    `INSERT INTO deliveries (phone, job_id, status, created_at, sent_at) VALUES (?, ?, 'sent', ?, ?)
-     ON CONFLICT (phone, job_id) DO UPDATE SET status = 'sent', sent_at = excluded.sent_at`,
+    `INSERT INTO deliveries (phone, job_id, status, token, created_at, sent_at) VALUES (?, ?, 'sent', ?, ?, ?)
+     ON CONFLICT (phone, job_id) DO UPDATE SET status = 'sent', token = excluded.token, sent_at = excluded.sent_at`,
   );
   const t = now();
-  for (const id of jobIds) stmt.run(phone, id, t, t);
+  for (const id of jobIds) stmt.run(phone, id, linkToken(phone, id), t, t);
 }
 
 async function sendTo(db: DatabaseSync, user: User, jobs: Job[], send: Sender): Promise<SendResult> {
-  const text = formatMessage(jobs);
+  const text = formatMessage(jobs, user.phone);
   const brief = `Avisos de trabajo nuevos que calzan con lo que busca esta persona:\n${jobs
-    .map((j) => `- ${j.id}: ${j.title} (${j.company ?? "empresa confidencial"}, ${j.location ?? "?"}) ${j.url}`)
+    .map((j) => `- ${j.id}: ${j.title} (${j.company ?? "empresa confidencial"}, ${j.location ?? "?"}) ${jobLink(user.phone, j)}`)
     .join("\n")}`.slice(0, 2000);
   const key = createHash("sha256").update(`${user.phone}|${jobs.map((j) => j.id).join(",")}`).digest("hex").slice(0, 32);
 

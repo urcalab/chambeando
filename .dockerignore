@@ -1,0 +1,7 @@
+.git
+node_modules
+data
+site
+test
+*.bundle
+.env

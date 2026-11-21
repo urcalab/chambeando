@@ -74,6 +74,20 @@ Hugging Face la primera vez y usa unos 550 MB de RAM.
 `site/index.html` es una página estática, sin build. El botón de WhatsApp se activa poniendo el número
 del agente en `WHATSAPP_NUMBER`, al final del archivo; mientras esté vacío dice "Muy pronto".
 
+## Despliegue
+
+Corre en un droplet compartido, detrás de kamal-proxy y Cloudflare, en https://chambeando.urcalab.com.
+\`.github/workflows/deploy.yml\` corre los tests y despliega con Kamal en cada push a main que toque el backend.
+Necesita tres secretos del repositorio: \`OP_SERVICE_ACCOUNT_TOKEN\` (lee \`.kamal/secrets\` desde 1Password),
+\`SSH_PRIVATE_KEY\` y \`DEPLOY_HOST\` (la IP del droplet, que no va en el repositorio).
+
+El contenedor tiene un tope de 1 GB de RAM. Con el modelo de embeddings cargado y una ingesta en curso usa
+unos 780 MB.
+
+Métricas de las recomendaciones: \`GET /stats?days=7\` (con la clave del backend) o \`kamal stats\`. Muestra
+cuántos avisos se evaluaron, se mandaron, se abrieron, se calificaron y en cuántos postularon, por portal, y
+los últimos motivos de "no me sirve". Los clics se cuentan porque cada link pasa por \`/r/<token>\`.
+
 ## Licencia
 
 MIT. El agente corre sobre [Vatio](https://vatio.ai).

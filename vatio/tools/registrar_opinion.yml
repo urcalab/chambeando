@@ -1,11 +1,12 @@
 # registrar_opinion
-description: Registra si un aviso que le mandamos le sirvió o no, y por qué.
-when_to_use: La persona opina de un aviso concreto que recibió.
+description: Registra si un aviso que le mandamos le sirvió o no, si postuló, y por qué.
+when_to_use: La persona opina de un aviso concreto que recibió, o cuenta que postuló a uno.
 parameters:
   type: object
   properties:
     aviso_id: { type: string, description: "El id del aviso, como lo entregó la herramienta (laborum:123 o computrabajo-mx:ABC)." }
     util: { type: boolean, description: "true si le sirvió o postuló." }
+    postulo: { type: boolean, description: "true si dice que postuló a este aviso." }
     motivo: { type: string, description: "Por qué, con sus palabras." }
   required: [aviso_id, util]
 access: public
@@ -17,4 +18,5 @@ request:
     phone: "$contact.phone_number"
     aviso_id:
     util:
+    postulo:
     motivo:

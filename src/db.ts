@@ -100,6 +100,10 @@ CREATE TABLE IF NOT EXISTS deliveries (
   status TEXT NOT NULL,
   useful INTEGER,
   feedback TEXT,
+  applied INTEGER,
+  token TEXT,
+  clicks INTEGER NOT NULL DEFAULT 0,
+  first_click_at TEXT,
   created_at TEXT NOT NULL,
   sent_at TEXT,
   PRIMARY KEY (phone, job_id)
@@ -112,7 +116,30 @@ export function openDb(path: string): DatabaseSync {
   const db = new DatabaseSync(path);
   db.exec("PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;");
   db.exec(SCHEMA);
+  migrate(db);
   return db;
+}
+
+/** Columnas agregadas después de la primera versión: se crean en bases que ya existían. */
+const ADDED_COLUMNS: Array<[table: string, column: string, type: string]> = [
+  ["jobs", "dedupe_key", "TEXT"],
+  ["jobs", "locality", "TEXT"],
+  ["jobs", "duplicate_of", "TEXT"],
+  ["users", "studies", "TEXT"],
+  ["users", "first_job", "INTEGER"],
+  ["users", "job_kinds", "TEXT NOT NULL DEFAULT '[]'"],
+  ["deliveries", "applied", "INTEGER"],
+  ["deliveries", "token", "TEXT"],
+  ["deliveries", "clicks", "INTEGER NOT NULL DEFAULT 0"],
+  ["deliveries", "first_click_at", "TEXT"],
+];
+
+function migrate(db: DatabaseSync): void {
+  for (const [table, column, type] of ADDED_COLUMNS) {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+    if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
+  db.exec("CREATE INDEX IF NOT EXISTS deliveries_token ON deliveries(token)");
 }
 
 export const now = () => new Date().toISOString();

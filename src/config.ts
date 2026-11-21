@@ -4,6 +4,8 @@ const int = (v: string | undefined, d: number) => (v ? Number.parseInt(v, 10) : 
 export const config = {
   port: int(env.PORT, 8787),
   backendApiKey: env.BACKEND_API_KEY ?? "",
+  /** URL pública del backend, sin "/" final. Con ella los links a avisos pasan por /r/<token> para contar clics. */
+  publicUrl: (env.PUBLIC_URL ?? "").replace(/\/+$/, ""),
   dbPath: env.DB_PATH ?? "data/chambeando.db",
   vatio: {
     baseUrl: env.VATIO_BASE_URL ?? "https://vatio.ai",

@@ -5,6 +5,7 @@ import { fromBlob, getUser, now, toBlob, type Job, type User } from "./db.ts";
 import type { Embedder } from "./embed.ts";
 import type { Judge } from "./llm.ts";
 import { pastFeedback, rank, userText } from "./match.ts";
+import { jobLink } from "./feedback.ts";
 import { markSent, pendingJobs } from "./notify.ts";
 import { COUNTRIES, ENABLED_COUNTRIES, JOB_KINDS, countryOf, countryOfPhone, normalizePhone, regionOf, type Country, type JobKind, type Modality } from "./text.ts";
 
@@ -36,7 +37,7 @@ const Preferences = z.object({
   excluir: z.array(z.string().trim().min(1)).max(20).optional(),
 });
 
-function present(j: Job) {
+function present(j: Job, phone: string) {
   return {
     id: j.id,
     cargo: j.title,
@@ -47,7 +48,7 @@ function present(j: Job) {
     sueldo: j.salary,
     publicado: j.published_at,
     portal: j.source,
-    url: j.url,
+    url: jobLink(phone, j),
     extracto: j.description.slice(0, 280),
   };
 }
@@ -90,7 +91,7 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
       }
     }
     markSent(db, user.phone, keep.map((f) => f.job.id));
-    return keep.map((f) => present(f.job));
+    return keep.map((f) => present(f.job, user.phone));
   }
 
   return {
@@ -168,16 +169,26 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
       requireUser(db, p.phone);
       const jobs = pendingJobs(db, p.phone, config.maxJobsPerMessage);
       markSent(db, p.phone, jobs.map((j) => j.id));
-      return { avisos: jobs.map(present) };
+      return { avisos: jobs.map((j) => present(j, p.phone)) };
     },
 
     async registrar_opinion(input: unknown) {
       const p = z
-        .object({ phone: Phone, aviso_id: z.string(), util: z.boolean(), motivo: z.string().trim().max(300).optional() })
+        .object({
+          phone: Phone,
+          aviso_id: z.string(),
+          util: z.boolean(),
+          postulo: z.boolean().optional(),
+          motivo: z.string().trim().max(300).optional(),
+        })
         .parse(input);
+      // Postular implica que le sirvió. Un dato que no viene no borra el que ya estaba.
       const res = db
-        .prepare("UPDATE deliveries SET useful = ?, feedback = ? WHERE phone = ? AND job_id = ?")
-        .run(p.util ? 1 : 0, p.motivo ?? null, p.phone, p.aviso_id);
+        .prepare(
+          `UPDATE deliveries SET useful = ?, applied = COALESCE(?, applied), feedback = COALESCE(?, feedback)
+           WHERE phone = ? AND job_id = ?`,
+        )
+        .run(p.util || p.postulo ? 1 : 0, p.postulo === undefined ? null : p.postulo ? 1 : 0, p.motivo ?? null, p.phone, p.aviso_id);
       if (res.changes === 0) throw new ToolError(404, `No le hemos mandado el aviso ${p.aviso_id} a esta persona.`);
       return { registrado: true };
     },

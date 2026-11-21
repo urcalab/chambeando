@@ -1,0 +1,58 @@
+# Chambeando: backend del agente (herramientas para Vatio, ingesta horaria y envío de avisos).
+# Corre en el droplet compartido detrás de kamal-proxy, como Wave y Umami.
+# Lo despliega .github/workflows/deploy.yml en cada push a main, o a mano con `DEPLOY_HOST=<ip> kamal deploy`.
+
+service: chambeando
+image: urcalab/chambeando
+
+ssh:
+  user: root
+
+servers:
+  web:
+    # La IP del droplet no va en este repositorio público: está detrás de Cloudflare y publicarla
+    # permitiría saltárselo. El workflow la toma del secreto DEPLOY_HOST.
+    hosts:
+      - <%= ENV.fetch("DEPLOY_HOST") %>
+    # El droplet es compartido con Vatio y Wave y no tiene swap. Con un tope de memoria, si Chambeando
+    # se pasa, el kernel mata solo este contenedor y no a Vatio.
+    options:
+      memory: 1g
+
+# SSL terminado en Cloudflare; kamal-proxy recibe HTTP desde el origen (mismo patrón que Wave y Umami).
+proxy:
+  ssl: false
+  forward_headers: true
+  host: chambeando.urcalab.com
+  app_port: 8787
+  healthcheck:
+    path: /health
+
+registry:
+  username: urcalab
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+env:
+  secret:
+    - BACKEND_API_KEY
+    - LLM_API_KEY
+    - VATIO_SERVER_KEY
+  clear:
+    PORT: "8787"
+    DB_PATH: /app/data/chambeando.db
+    PUBLIC_URL: https://chambeando.urcalab.com
+    COUNTRIES: CL,MX,PE,CO
+    VATIO_WORKSPACE: chambeando
+    LLM_MODEL: anthropic/claude-haiku-5.5
+
+# La base SQLite sobrevive a cada deploy.
+volumes:
+  - chambeando_data:/app/data
+
+builder:
+  arch: amd64
+
+aliases:
+  logs: app logs -f
+  stats: app exec --reuse "node src/cli.ts stats"

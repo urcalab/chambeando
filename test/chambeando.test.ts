@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
+import { config } from "../src/config.ts";
 import { now, openDb, toBlob } from "../src/db.ts";
+import { linkToken, recordClick, stats } from "../src/feedback.ts";
 import { dedupeKey, ingest, localityOf, sameLocality } from "../src/ingest.ts";
 import type { Embedder } from "../src/embed.ts";
 import { parseVerdicts, type Judge } from "../src/llm.ts";
@@ -412,6 +418,54 @@ test("duplicados: el mismo aviso en dos portales o republicado se guarda una vez
   assert.ok(ids.includes("bumeran-pe:1"));
   assert.ok(!ids.includes("computrabajo-pe:9"));
   assert.equal(new Set(ids).size, ids.length);
+});
+
+test("feedback: links con token cuentan clics, y la opinión y la postulación llegan a las métricas", async () => {
+  config.publicUrl = "https://chambeando.test";
+  try {
+    const db = openDb(":memory:");
+    await addJob(db, { id: "a", title: "Contador general" });
+    await addJob(db, { id: "b", title: "Contador junior" });
+    const tools = createTools(db, fakeEmbed, null);
+    const phone = "+56933334444";
+    const saved = await tools.guardar_preferencias({ phone, resumen: "contador" });
+    const link = saved.avisos[0]!.url;
+    assert.match(link, /^https:\/\/chambeando\.test\/r\/[A-Za-z0-9_-]{12}$/);
+    assert.ok(!link.includes("56933334444"));
+    const token = link.split("/r/")[1]!;
+    assert.equal(token, linkToken(phone, saved.avisos[0]!.id));
+
+    // El clic redirige al aviso original y queda contado.
+    assert.equal(recordClick(db, token), `https://x/${saved.avisos[0]!.id}`);
+    recordClick(db, token);
+    assert.equal(recordClick(db, "noexiste1234"), null);
+
+    await tools.registrar_opinion({ phone, aviso_id: saved.avisos[0]!.id, util: true, postulo: true });
+    await tools.registrar_opinion({ phone, aviso_id: saved.avisos[1]!.id, util: false, motivo: "pedían inglés" });
+    const s = stats(db, 7);
+    assert.equal(s.funnel.sent, 2);
+    assert.equal(s.funnel.clicked, 1);
+    assert.equal(s.funnel.click_pct, 50);
+    assert.equal(s.funnel.useful_pct, 50);
+    assert.equal(s.funnel.applied, 1);
+    assert.deepEqual(s.complaints.map((c) => ({ ...c })), [{ title: saved.avisos[1]!.cargo, feedback: "pedían inglés" }]);
+    // Sin `motivo`, una segunda opinión no borra el que ya estaba.
+    await tools.registrar_opinion({ phone, aviso_id: saved.avisos[1]!.id, util: false });
+    assert.equal(stats(db, 7).complaints.length, 1);
+  } finally {
+    config.publicUrl = "";
+  }
+});
+
+test("una base de la versión anterior recibe las columnas nuevas al abrirse", () => {
+  const path = join(mkdtempSync(join(tmpdir(), "chambeando-")), "old.db");
+  const old = new DatabaseSync(path);
+  old.exec(`CREATE TABLE deliveries (phone TEXT NOT NULL, job_id TEXT NOT NULL, score REAL, reason TEXT, status TEXT NOT NULL,
+    useful INTEGER, feedback TEXT, created_at TEXT NOT NULL, sent_at TEXT, PRIMARY KEY (phone, job_id))`);
+  old.close();
+  const db = openDb(path);
+  const cols = (db.prepare("PRAGMA table_info(deliveries)").all() as Array<{ name: string }>).map((c) => c.name);
+  for (const c of ["applied", "token", "clicks", "first_click_at"]) assert.ok(cols.includes(c), c);
 });
 
 test("si el modelo falla, los avisos se reintentan en la próxima corrida", async () => {

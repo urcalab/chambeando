@@ -1,0 +1,84 @@
+name: Deploy
+
+# Despliega el backend al droplet con Kamal en cada push a main que toque el backend.
+on:
+  push:
+    branches: [main]
+    paths:
+      - src/**
+      - scripts/**
+      - package.json
+      - package-lock.json
+      - Dockerfile
+      - config/deploy.yml
+      - .kamal/**
+      - .github/workflows/deploy.yml
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+    steps:
+      - name: Check deploy secrets
+        run: |
+          missing=""
+          [ -n "$OP_SERVICE_ACCOUNT_TOKEN" ] || missing="$missing OP_SERVICE_ACCOUNT_TOKEN"
+          [ -n "$DEPLOY_HOST" ] || missing="$missing DEPLOY_HOST"
+          [ -n "${{ secrets.SSH_PRIVATE_KEY != '' }}" ] && [ "${{ secrets.SSH_PRIVATE_KEY != '' }}" = "true" ] || missing="$missing SSH_PRIVATE_KEY"
+          if [ -n "$missing" ]; then
+            echo "::error::Faltan secretos del repositorio:$missing (Settings → Secrets and variables → Actions)"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Tests
+        run: npm ci --no-audit --no-fund && npm test
+
+      - name: Install 1Password CLI
+        uses: 1password/install-cli-action@v1
+
+      - name: Install Kamal
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+      - run: gem install kamal -v "~> 2.7" --no-document
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up SSH
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          # Entradas sin hash: SSHKit (Kamal) no entiende las de ssh-keyscan -H.
+          ssh-keyscan -t ed25519,ecdsa,rsa "$DEPLOY_HOST" > ~/.ssh/known_hosts
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Deploy
+        run: kamal deploy
+
+      - name: Smoke test
+        run: |
+          for i in 1 2 3 4 5 6; do
+            curl -fsS https://chambeando.urcalab.com/health && exit 0
+            sleep 10
+          done
+          exit 1

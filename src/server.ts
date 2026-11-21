@@ -7,6 +7,7 @@ import { runCycle } from "./cycle.ts";
 import { openDb } from "./db.ts";
 import { llmJudge, type Judge } from "./llm.ts";
 import { localEmbedder, type Embedder } from "./embed.ts";
+import { recordClick, stats } from "./feedback.ts";
 import { ToolError, createTools } from "./tools.ts";
 
 function authorized(req: IncomingMessage, key: string): boolean {
@@ -37,12 +38,28 @@ export function createApp(db: DatabaseSync, embed: Embedder, apiKey: string, jud
   const tools = createTools(db, embed, judge);
   return createServer(async (req, res) => {
     try {
-      const path = new URL(req.url ?? "/", "http://x").pathname;
+      const url = new URL(req.url ?? "/", "http://x");
+      const path = url.pathname;
       if (req.method === "GET" && path === "/health") {
         const count = (t: string) => (db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get() as { n: number }).n;
         return send(res, 200, { ok: true, jobs: count("jobs"), users: count("users") });
       }
+      // Links de los avisos: públicos, cuentan el clic y redirigen al portal.
+      const token = req.method === "GET" ? path.match(/^\/r\/([A-Za-z0-9_-]{8,32})$/)?.[1] : undefined;
+      if (token) {
+        const target = recordClick(db, token);
+        if (!target) {
+          res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+          return res.end("Este aviso ya no está disponible.");
+        }
+        res.writeHead(302, { location: target, "cache-control": "no-store", "referrer-policy": "no-referrer" });
+        return res.end();
+      }
       if (!authorized(req, apiKey)) return send(res, 401, { error: "No autorizado" });
+      if (req.method === "GET" && path === "/stats") {
+        const days = Math.min(Math.max(Number(url.searchParams.get("days")) || 7, 1), 90);
+        return send(res, 200, stats(db, days));
+      }
       const name = path.match(/^\/tools\/([a-z_]+)$/)?.[1];
       if (req.method === "POST" && name && Object.hasOwn(tools, name)) {
         return send(res, 200, await tools[name as keyof typeof tools](await readJson(req)));

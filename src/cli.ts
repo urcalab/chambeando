@@ -8,7 +8,10 @@ const db = openDb(config.dbPath);
 const cmd = process.argv[2];
 if (cmd === "ingest") console.log(JSON.stringify(await ingest(db, localEmbedder, sources()), null, 2));
 else if (cmd === "run") console.log(JSON.stringify(await runCycle(db, localEmbedder), null, 2));
-else if (cmd === "counts") {
+else if (cmd === "stats") {
+  const { stats } = await import("./feedback.ts");
+  console.log(JSON.stringify(stats(db, Number(process.argv[3]) || 7), null, 2));
+} else if (cmd === "counts") {
   // Avisos activos que declara cada portal, para la lista de fuentes de la landing.
   const { JOBINT_SITES } = await import("./sources/jobint.ts");
   const { fetchJson } = await import("./sources/http.ts");
@@ -31,6 +34,6 @@ else if (cmd === "counts") {
   }
   console.log(JSON.stringify(out, null, 2));
 } else {
-  console.error("uso: node src/cli.ts ingest|run|counts");
+  console.error("uso: node src/cli.ts ingest|run|counts|stats [días]");
   process.exit(1);
 }
