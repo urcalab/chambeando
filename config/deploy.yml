@@ -11,7 +11,7 @@ ssh:
 servers:
   web:
     # La IP del droplet no va en este repositorio público: está detrás de Cloudflare y publicarla
-    # permitiría saltárselo. El workflow la toma del secreto DEPLOY_HOST.
+    # permitiría saltárselo. El workflow la pide a la API de DigitalOcean.
     hosts:
       - <%= ENV.fetch("DEPLOY_HOST") %>
     # El droplet es compartido con Vatio y Wave y no tiene swap. Con un tope de memoria, si Chambeando

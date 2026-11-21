@@ -79,8 +79,8 @@ del agente en `WHATSAPP_NUMBER`, al final del archivo; mientras esté vacío dic
 Corre en un droplet compartido, detrás de kamal-proxy y Cloudflare, en https://chambeando.urcalab.com.
 `.github/workflows/deploy.yml` solo despliega, con Kamal, en cada push a main que toque el backend. Los tests corren
 antes, en tu máquina: `npm install` activa el hook `.githooks/pre-push`, que corre `npm test` y frena el push si falla.
-Necesita tres secretos del repositorio: `OP_SERVICE_ACCOUNT_TOKEN` (lee `.kamal/secrets` desde 1Password),
-`SSH_PRIVATE_KEY` y `DEPLOY_HOST` (la IP del droplet, que no va en el repositorio).
+El único secreto del repositorio es `OP_SERVICE_ACCOUNT_TOKEN`: la clave SSH, los secretos de `.kamal/secrets` y
+el token para pedir la IP del droplet a DigitalOcean (la IP no va en el repositorio) salen de 1Password.
 
 El contenedor tiene un tope de 1 GB de RAM. Con el modelo de embeddings cargado y una ingesta en curso usa
 unos 780 MB.

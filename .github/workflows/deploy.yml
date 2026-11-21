@@ -27,18 +27,14 @@ jobs:
   deploy:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    # Todo sale de 1Password: el único secreto del repositorio es OP_SERVICE_ACCOUNT_TOKEN, como en los otros repos.
     env:
       OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
-      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
     steps:
-      - name: Check deploy secrets
+      - name: Check deploy secret
         run: |
-          missing=""
-          [ -n "$OP_SERVICE_ACCOUNT_TOKEN" ] || missing="$missing OP_SERVICE_ACCOUNT_TOKEN"
-          [ -n "$DEPLOY_HOST" ] || missing="$missing DEPLOY_HOST"
-          [ -n "${{ secrets.SSH_PRIVATE_KEY != '' }}" ] && [ "${{ secrets.SSH_PRIVATE_KEY != '' }}" = "true" ] || missing="$missing SSH_PRIVATE_KEY"
-          if [ -n "$missing" ]; then
-            echo "::error::Faltan secretos del repositorio:$missing (Settings → Secrets and variables → Actions)"
+          if [ -z "$OP_SERVICE_ACCOUNT_TOKEN" ]; then
+            echo "::error::Falta el secreto OP_SERVICE_ACCOUNT_TOKEN (Settings → Secrets and variables → Actions)"
             exit 1
           fi
 
@@ -56,15 +52,23 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # La IP del droplet no va en este repositorio público (está detrás de Cloudflare): se pide a DigitalOcean.
+      - name: Find the droplet
+        run: |
+          token=$(op read "op://DevOps Routines/DigitalOcean/API_KEY")
+          ip=$(curl -fsS -H "Authorization: Bearer $token" https://api.digitalocean.com/v2/droplets/519098336 \
+            | jq -r '.droplet.networks.v4[] | select(.type == "public") | .ip_address' | head -1)
+          [ -n "$ip" ] || { echo "::error::No se pudo obtener la IP del droplet"; exit 1; }
+          echo "::add-mask::$ip"
+          echo "DEPLOY_HOST=$ip" >> "$GITHUB_ENV"
+
       - name: Set up SSH
         run: |
           install -m 700 -d ~/.ssh
-          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          op read "op://Vatio/id_ed25519/private key?ssh-format=openssh" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           # Entradas sin hash: SSHKit (Kamal) no entiende las de ssh-keyscan -H.
           ssh-keyscan -t ed25519,ecdsa,rsa "$DEPLOY_HOST" > ~/.ssh/known_hosts
-        env:
-          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
 
       - name: Deploy
         run: kamal deploy
