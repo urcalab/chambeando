@@ -1,0 +1,15 @@
+// Worker de Cloudflare que sirve la landing (site/index.html) en la raíz de chambeando.urcalab.com,
+// sin pasar por el droplet. La ruta es solo "/": los links de avisos (/r/...), /health y las
+// herramientas de Vatio (/tools/...) siguen yendo al backend.
+// Lo despliega .github/workflows/deploy-landing.yml en cada cambio de site/ o de este archivo.
+{
+  "name": "chambeando-landing",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "../site",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "none"
+  },
+  "workers_dev": false,
+  "routes": [{ "pattern": "chambeando.urcalab.com/", "zone_name": "urcalab.com" }]
+}

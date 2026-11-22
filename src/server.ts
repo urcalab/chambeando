@@ -35,7 +35,8 @@ function send(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
-// La landing es una página estática; se lee una vez al arrancar.
+// La landing es una página estática; se lee una vez al arrancar. En producción la raíz la responde un Worker de
+// Cloudflare (landing/wrangler.jsonc) y esta copia no recibe tráfico: queda como respaldo si se quita la ruta del Worker.
 const LANDING = (() => {
   try {
     return readFileSync(new URL("../site/index.html", import.meta.url));

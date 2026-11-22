@@ -76,6 +76,10 @@ del agente en `WHATSAPP_NUMBER`, al final del archivo; mientras esté vacío dic
 
 ## Despliegue
 
+La landing (`site/index.html`) la sirve un Worker de Cloudflare en la raíz de `chambeando.urcalab.com`
+(`landing/wrangler.jsonc`, desplegado por `.github/workflows/deploy-landing.yml`), así que las visitas a la
+página no llegan al droplet. El resto de las rutas (`/tools/*`, `/r/*`, `/health`, `/stats`) van al backend.
+
 Corre en un droplet compartido, detrás de kamal-proxy y Cloudflare, en https://chambeando.urcalab.com.
 `.github/workflows/deploy.yml` solo despliega, con Kamal, en cada push a main que toque el backend. Los tests corren
 antes, en tu máquina: `npm install` activa el hook `.githooks/pre-push`, que corre `npm test` y frena el push si falla.

@@ -1,0 +1,50 @@
+name: Deploy landing
+
+# Publica site/ en un Worker de Cloudflare (landing/wrangler.jsonc), que responde la raíz de
+# chambeando.urcalab.com sin llegar al droplet.
+on:
+  push:
+    branches: [main]
+    paths:
+      - site/**
+      - landing/**
+      - .github/workflows/deploy-landing.yml
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-landing
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install 1Password CLI
+        uses: 1password/install-cli-action@v1
+
+      - name: Deploy
+        working-directory: landing
+        run: |
+          export CLOUDFLARE_API_TOKEN=$(op read "op://DevOps Routines/Cloudflare/CLOUDFLARE_API_TOKEN")
+          export CLOUDFLARE_ACCOUNT_ID=$(op read "op://DevOps Routines/Cloudflare/CLOUDFLARE_ACCOUNT_ID")
+          npx --yes wrangler@4 deploy
+
+      - name: Check
+        run: |
+          for i in 1 2 3 4 5 6; do
+            curl -fsS https://chambeando.urcalab.com/ | grep -q "<title>Chambeando" && exit 0
+            sleep 10
+          done
+          exit 1
