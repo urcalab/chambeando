@@ -14,3 +14,7 @@ request:
   body:
     phone: "$contact.phone_number"
     pausar:
+respond:
+  data:
+    activo: "$.activo"
+  message: Listo. activo dice si los avisos automáticos quedaron encendidos.

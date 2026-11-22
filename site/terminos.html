@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Términos y privacidad · Chambeando</title>
+<meta name="description" content="Qué es Chambeando, qué datos guarda y cómo borrarlos.">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="https://chambeando.urcalab.com/terminos">
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<script defer src="https://umami.urcalab.com/script.js" data-website-id="18c03b51-2f6a-4f2e-9209-ab8ba3002ddd"></script>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Instrument+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: una columna de lectura con el chat de WhatsApp como pieza central; el amarillo de
+   destacador marca lo que importa, como quien marca avisos en los clasificados del diario. */
+:root {
+  --paper: #f2f5f1;
+  --surface: #ffffff;
+  --ink: #12241f;
+  --muted: #54655f;
+  --line: #d5ddd7;
+  --marker: #ffd94a;
+  --marker-ink: #12241f;
+  --bubble-in: #ffffff;
+  --bubble-out: #d6f3c4;
+  --chat-bg: #e6ebe3;
+  --display: "Bricolage Grotesque", "Arial Narrow", system-ui, sans-serif;
+  --body: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0f1a17; --surface: #17251f; --ink: #edf3ee; --muted: #a3b3ab; --line: #2b3b34;
+    --marker: #ffd94a; --marker-ink: #12241f; --bubble-in: #223129; --bubble-out: #2f5a3a; --chat-bg: #121d19;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0f1a17; --surface: #17251f; --ink: #edf3ee; --muted: #a3b3ab; --line: #2b3b34;
+  --marker: #ffd94a; --marker-ink: #12241f; --bubble-in: #223129; --bubble-out: #2f5a3a; --chat-bg: #121d19;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 1.0625rem/1.55 var(--body);
+  -webkit-font-smoothing: antialiased;
+}
+.wrap {
+  max-width: 68rem;
+  margin-inline: auto;
+  padding-left: max(20px, env(safe-area-inset-left, 0px));
+  padding-right: max(20px, env(safe-area-inset-right, 0px));
+}
+h1, h2, h3 { font-family: var(--display); line-height: 1.05; margin: 0; text-wrap: balance; letter-spacing: -0.02em; }
+p { margin: 0; }
+a { color: inherit; }
+:focus-visible { outline: 3px solid var(--marker); outline-offset: 3px; }
+mark {
+  background: linear-gradient(transparent 12%, var(--marker) 12%, var(--marker) 92%, transparent 92%);
+  color: var(--marker-ink);
+  padding: 0 0.12em;
+  border-radius: 2px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+
+.top { display: flex; align-items: center; padding-block: 1.25rem; }
+.brand { font: 800 1.5rem/1 var(--display); letter-spacing: -0.03em; text-decoration: none; }
+.brand span { background: var(--marker); color: var(--marker-ink); padding: 0.1em 0.3em; border-radius: 3px; }
+article { max-width: 42rem; padding-block: 1.5rem 4rem; display: flex; flex-direction: column; gap: 2rem; }
+article h1 { font-size: clamp(2rem, 5vw, 2.75rem); font-weight: 800; }
+article section { display: flex; flex-direction: column; gap: 0.6rem; }
+article h2 { font-size: 1.25rem; font-weight: 700; }
+article p, article li { color: var(--muted); }
+article ul { margin: 0; padding-left: 1.2rem; display: grid; gap: 0.4rem; }
+article strong { color: var(--ink); font-weight: 600; }
+.updated { font-size: 0.875rem; }
+article a { text-decoration: underline; text-decoration-color: var(--marker); text-decoration-thickness: 3px; text-underline-offset: 4px; }
+</style>
+</head>
+<body>
+<header class="wrap top"><a class="brand" href="/"><span>Chambeando</span></a></header>
+<main class="wrap">
+<article>
+  <div>
+    <h1>Términos y privacidad</h1>
+    <p class="updated">Actualizado el 22 de noviembre de 2026.</p>
+  </div>
+
+  <section>
+    <h2>Qué es Chambeando</h2>
+    <p>Un agente de WhatsApp que revisa avisos de trabajo publicados en portales de empleo y te escribe cuando aparece uno que corresponde a lo que buscas. Es gratis. Es un proyecto de código abierto de Urcalab, en Chile.</p>
+  </section>
+
+  <section>
+    <h2>Lo que hace y lo que no</h2>
+    <ul>
+      <li>Te muestra avisos publicados por otros, con el link al aviso original. <strong>No publica avisos propios ni postula por ti.</strong></li>
+      <li>No está afiliado a los portales de donde salen los avisos. Las condiciones de cada aviso y la postulación son entre tú, la empresa y el portal.</li>
+      <li>Un agente de IA elige qué avisos mandarte y puede equivocarse. Revisa cada aviso antes de postular.</li>
+      <li>No garantiza que encuentres trabajo ni que un aviso siga vigente.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Qué datos guardamos</h2>
+    <ul>
+      <li><strong>Tu número de WhatsApp</strong>, para escribirte.</li>
+      <li><strong>Tu perfil</strong>: lo que le cuentas al agente sobre lo que buscas (estudios, tipo de trabajo, dónde, lo que no quieres) y tu nombre si se lo dices.</li>
+      <li><strong>Qué avisos te mandamos</strong>, si abriste el link y lo que nos dijiste de cada uno, para mejorar lo que te llega.</li>
+      <li><strong>La conversación</strong>, que guarda la plataforma del agente.</li>
+    </ul>
+    <p>No te pedimos correo, documento de identidad, currículum ni contraseña. No vendemos tus datos ni los usamos para publicidad.</p>
+  </section>
+
+  <section>
+    <h2>Con quién se comparten</h2>
+    <p>Solo con los servicios que hacen funcionar el agente: WhatsApp (Meta) para los mensajes, Vatio para la conversación, un proveedor de modelos de IA que lee tu perfil para elegir avisos, y los servidores donde corre (DigitalOcean y Cloudflare). Cuando abres un aviso, el portal recibe tu visita como cualquier otra.</p>
+  </section>
+
+  <section>
+    <h2>Cómo pausar o borrar</h2>
+    <ul>
+      <li>Escríbele <strong>"pausa"</strong> al agente y deja de escribirte.</li>
+      <li>Escríbele <strong>"borra mis datos"</strong> y borramos tu perfil y tu historial de avisos. La conversación se puede borrar escribiéndonos por el mismo WhatsApp.</li>
+      <li>Los avisos se borran solos a los 45 días.</li>
+    </ul>
+  </section>
+
+  <section>
+    <h2>Contacto</h2>
+    <p>Por el mismo WhatsApp del agente: pide hablar con una persona.</p>
+  </section>
+
+  <p><a href="/">Volver a Chambeando</a></p>
+</article>
+</main>
+</body>
+</html>

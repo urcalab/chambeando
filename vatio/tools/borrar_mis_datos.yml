@@ -11,3 +11,7 @@ request:
   requires: [contact.phone_number]
   body:
     phone: "$contact.phone_number"
+respond:
+  data:
+    borrado: "$.borrado"
+  message: Datos borrados.

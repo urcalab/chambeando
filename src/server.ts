@@ -60,7 +60,7 @@ export function createApp(db: DatabaseSync, embed: Embedder, apiKey: string, jud
         return send(res, 200, { ok: true, jobs: count("jobs"), users: count("users") });
       }
       // Links de los avisos: públicos, cuentan el clic y redirigen al portal.
-      const token = req.method === "GET" ? path.match(/^\/r\/([A-Za-z0-9_-]{8,32})$/)?.[1] : undefined;
+      const token = req.method === "GET" ? path.match(/^\/r\/([A-Za-z0-9_-]{1,32})$/)?.[1] : undefined;
       if (token) {
         const target = recordClick(db, token);
         if (!target) {

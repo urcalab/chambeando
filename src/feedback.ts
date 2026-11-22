@@ -7,8 +7,16 @@ import { now, type Job } from "./db.ts";
  * El token del link a un aviso para una persona: el mismo par persona y aviso da siempre el mismo token,
  * así que el link se puede armar antes de guardar la entrega. No contiene el teléfono ni se puede revertir.
  */
+// Sin mayúsculas ni caracteres que se confunden (l, o, 0, 1): el agente copia el link al escribir su mensaje,
+// y con mayúsculas y minúsculas mezcladas a veces lo alteraba.
+const ALPHABET = "abcdefghijkmnpqrstuvwxyz23456789";
+const TOKEN_LENGTH = 10;
+
 export function linkToken(phone: string, jobId: string): string {
-  return createHmac("sha256", config.backendApiKey || "dev").update(`${phone}|${jobId}`).digest("base64url").slice(0, 12);
+  const bytes = createHmac("sha256", config.backendApiKey || "dev").update(`${phone}|${jobId}`).digest();
+  let out = "";
+  for (let i = 0; i < TOKEN_LENGTH; i++) out += ALPHABET[bytes[i]! % ALPHABET.length];
+  return out;
 }
 
 /** El link que ve la persona: pasa por /r/<token> para contar el clic y redirige al aviso original. */
@@ -17,10 +25,16 @@ export function jobLink(phone: string, job: Pick<Job, "id" | "url">): string {
 }
 
 /** Registra un clic y devuelve la URL original, o null si el token no existe o el aviso ya se borró. */
-export function recordClick(db: DatabaseSync, token: string): string | null {
-  const row = db
-    .prepare("SELECT d.phone, d.job_id, j.url FROM deliveries d JOIN jobs j ON j.id = d.job_id WHERE d.token = ?")
-    .get(token) as { phone: string; job_id: string; url: string } | undefined;
+export function recordClick(db: DatabaseSync, rawToken: string): string | null {
+  const token = rawToken.toLowerCase();
+  const query = "SELECT d.phone, d.job_id, j.url FROM deliveries d JOIN jobs j ON j.id = d.job_id WHERE d.token ";
+  type Row = { phone: string; job_id: string; url: string };
+  let row = db.prepare(`${query}= ?`).get(token) as Row | undefined;
+  // Un link que llegó cortado (al menos 6 caracteres) todavía sirve si el comienzo es de un solo aviso.
+  if (!row && token.length >= 6) {
+    const rows = db.prepare(`${query}LIKE ? LIMIT 2`).all(`${token}%`) as Row[];
+    if (rows.length === 1) row = rows[0];
+  }
   if (!row) return null;
   db.prepare(
     "UPDATE deliveries SET clicks = clicks + 1, first_click_at = COALESCE(first_click_at, ?) WHERE phone = ? AND job_id = ?",

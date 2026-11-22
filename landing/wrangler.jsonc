@@ -1,6 +1,6 @@
 // Worker de Cloudflare que sirve la landing (site/index.html) en la raíz de chambeando.urcalab.com,
-// sin pasar por el droplet. La ruta es solo "/": los links de avisos (/r/...), /health y las
-// herramientas de Vatio (/tools/...) siguen yendo al backend.
+// sin pasar por el droplet. Las rutas son solo las páginas y las imágenes de site/: los links de avisos (/r/...),
+// /health y las herramientas de Vatio (/tools/...) siguen yendo al backend. Un archivo nuevo en site/ necesita su ruta aquí.
 // Lo despliega .github/workflows/deploy-landing.yml en cada cambio de site/ o de este archivo.
 {
   "name": "chambeando-landing",
@@ -11,5 +11,12 @@
     "not_found_handling": "none"
   },
   "workers_dev": false,
-  "routes": [{ "pattern": "chambeando.urcalab.com/", "zone_name": "urcalab.com" }]
+  "routes": [
+    { "pattern": "chambeando.urcalab.com/", "zone_name": "urcalab.com" },
+    { "pattern": "chambeando.urcalab.com/terminos", "zone_name": "urcalab.com" },
+    { "pattern": "chambeando.urcalab.com/og.png", "zone_name": "urcalab.com" },
+    { "pattern": "chambeando.urcalab.com/favicon-32.png", "zone_name": "urcalab.com" },
+    { "pattern": "chambeando.urcalab.com/apple-touch-icon.png", "zone_name": "urcalab.com" },
+    { "pattern": "chambeando.urcalab.com/favicon.ico", "zone_name": "urcalab.com" }
+  ]
 }

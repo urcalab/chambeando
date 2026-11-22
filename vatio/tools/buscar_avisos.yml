@@ -17,5 +17,8 @@ request:
     consulta:
     region:
 respond:
+  data:
+    avisos: "$.avisos"
   message:
     when_empty: No hay avisos nuevos que calcen por ahora.
+    default: "{{count}} avisos para mostrarle."

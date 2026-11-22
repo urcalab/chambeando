@@ -430,7 +430,7 @@ test("feedback: links con token cuentan clics, y la opinión y la postulación l
     const phone = "+56933334444";
     const saved = await tools.guardar_preferencias({ phone, resumen: "contador" });
     const link = saved.avisos[0]!.url;
-    assert.match(link, /^https:\/\/chambeando\.test\/r\/[A-Za-z0-9_-]{12}$/);
+    assert.match(link, /^https:\/\/chambeando\.test\/r\/[a-z2-9]{10}$/);
     assert.ok(!link.includes("56933334444"));
     const token = link.split("/r/")[1]!;
     assert.equal(token, linkToken(phone, saved.avisos[0]!.id));
@@ -439,12 +439,16 @@ test("feedback: links con token cuentan clics, y la opinión y la postulación l
     assert.equal(recordClick(db, token), `https://x/${saved.avisos[0]!.id}`);
     recordClick(db, token);
     assert.equal(recordClick(db, "noexiste1234"), null);
+    // Mayúsculas o un link cortado (6+ caracteres) siguen llevando al aviso; un comienzo demasiado corto, no.
+    assert.equal(recordClick(db, token.toUpperCase()), `https://x/${saved.avisos[0]!.id}`);
+    assert.equal(recordClick(db, token.slice(0, 7)), `https://x/${saved.avisos[0]!.id}`);
+    assert.equal(recordClick(db, token.slice(0, 4)), null);
 
     await tools.registrar_opinion({ phone, aviso_id: saved.avisos[0]!.id, util: true, postulo: true });
     await tools.registrar_opinion({ phone, aviso_id: saved.avisos[1]!.id, util: false, motivo: "pedían inglés" });
     const s = stats(db, 7);
     assert.equal(s.funnel.sent, 2);
-    assert.equal(s.funnel.clicked, 1);
+    assert.equal(s.funnel.clicked, 1); // un aviso abierto, aunque con varios clics
     assert.equal(s.funnel.click_pct, 50);
     assert.equal(s.funnel.useful_pct, 50);
     assert.equal(s.funnel.applied, 1);

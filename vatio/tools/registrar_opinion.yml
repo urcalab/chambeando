@@ -20,3 +20,7 @@ request:
     util:
     postulo:
     motivo:
+respond:
+  data:
+    registrado: "$.registrado"
+  message: Opinión registrada.

@@ -11,3 +11,9 @@ request:
   requires: [contact.phone_number]
   body:
     phone: "$contact.phone_number"
+respond:
+  data:
+    avisos: "$.avisos"
+  message:
+    when_empty: No hay avisos pendientes para esta persona.
+    default: "{{count}} avisos nuevos para mostrarle."

@@ -43,3 +43,11 @@ request:
     modalidades:
     sueldo_minimo:
     excluir:
+respond:
+  data:
+    avisos: "$.avisos"
+    preferencias: "$.preferencias"
+    nuevo: "$.nuevo"
+  message:
+    when_empty: Perfil guardado. Por ahora no hay avisos que le sirvan.
+    default: "Perfil guardado. Hay {{count}} avisos para mostrarle."
