@@ -1,4 +1,5 @@
 import { timingSafeEqual } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import type { DatabaseSync } from "node:sqlite";
 import { ZodError } from "zod";
@@ -34,12 +35,25 @@ function send(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
+// La landing es una página estática; se lee una vez al arrancar.
+const LANDING = (() => {
+  try {
+    return readFileSync(new URL("../site/index.html", import.meta.url));
+  } catch {
+    return null;
+  }
+})();
+
 export function createApp(db: DatabaseSync, embed: Embedder, apiKey: string, judge: Judge | null = null) {
   const tools = createTools(db, embed, judge);
   return createServer(async (req, res) => {
     try {
       const url = new URL(req.url ?? "/", "http://x");
       const path = url.pathname;
+      if ((req.method === "GET" || req.method === "HEAD") && (path === "/" || path === "/index.html") && LANDING) {
+        res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" });
+        return res.end(req.method === "HEAD" ? undefined : LANDING);
+      }
       if (req.method === "GET" && path === "/health") {
         const count = (t: string) => (db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).get() as { n: number }).n;
         return send(res, 200, { ok: true, jobs: count("jobs"), users: count("users") });

@@ -9,6 +9,7 @@ RUN npm ci --omit=dev --no-audit --no-fund
 
 COPY src ./src
 COPY scripts ./scripts
+COPY site ./site
 
 # El modelo de embeddings (unos 135 MB) se descarga al construir la imagen, para que el servidor
 # no dependa de Hugging Face al arrancar o reiniciarse.
