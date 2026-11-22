@@ -318,11 +318,11 @@ footer { border-top: 1px solid var(--line); padding-block: 1.75rem 2.5rem; color
         </details>
         <details>
           <summary>¿Es gratis?</summary>
-          <p>Sí. Buscar y recibir avisos es gratis. Estamos preparando un <a href="#pro">plan pagado opcional</a> con ayuda para el CV y para postular; el plan gratis no cambia.</p>
+          <p>Sí. Buscar y recibir avisos es gratis. Estamos preparando un <a href="#pro">plan pagado opcional</a> que te arma el CV y postula por ti; el plan gratis no cambia.</p>
         </details>
         <details>
           <summary>¿El agente postula por mí?</summary>
-          <p>Hoy no. Busca y te avisa; tú decides. Para postular, el portal del aviso te puede pedir que crees una cuenta con ellos.</p>
+          <p>Hoy no: busca y te avisa, y tú postulas en el portal. Estamos preparando <a href="#pro">Chambeando Pro</a>, con el que el agente va a postular por ti.</p>
         </details>
         <details>
           <summary>¿Cuántos mensajes me van a llegar?</summary>
@@ -344,12 +344,12 @@ footer { border-top: 1px solid var(--line); padding-block: 1.75rem 2.5rem; color
     <div class="wrap pro">
       <div>
         <p class="eyebrow">Próximamente</p>
-        <h2>Chambeando Pro: que el agente también te ayude a postular</h2>
+        <h2>Chambeando Pro: que el agente postule por ti</h2>
         <p class="intro">El plan gratis te avisa. Estamos preparando un plan pagado para que el agente haga más por ti:</p>
         <ul>
           <li>Te arma un CV a partir de lo que le cuentas</li>
           <li>Lo adapta a cada aviso y te escribe la carta de presentación</li>
-          <li>Te ayuda a postular en los portales</li>
+          <li>Postula por ti en los portales</li>
         </ul>
       </div>
       <div class="pro-cta">
@@ -395,7 +395,7 @@ footer { border-top: 1px solid var(--line); padding-block: 1.75rem 2.5rem; color
 // Mientras esté vacío, los botones se muestran como "muy pronto" y no llevan a ninguna parte.
 const WHATSAPP_NUMBER = "";
 const FIRST_MESSAGE = "Hola, busco chamba";
-const PRO_MESSAGE = "Hola, me interesa Chambeando Pro (CV y ayuda para postular)";
+const PRO_MESSAGE = "Hola, me interesa Chambeando Pro (CV y que postulen por mí)";
 for (const a of document.querySelectorAll("[data-wa]")) {
   if (WHATSAPP_NUMBER) {
     a.href = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(FIRST_MESSAGE)}`;
