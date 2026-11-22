@@ -10,7 +10,7 @@
     "start": "node src/server.ts",
     "ingest": "node src/cli.ts ingest",
     "run-once": "node src/cli.ts run",
-    "test": "node --test test/*.test.ts",
+    "test": "node --test test/*.test.ts landing/*.test.js",
     "prepare": "git config core.hooksPath .githooks 2>/dev/null || true"
   },
   "dependencies": {
