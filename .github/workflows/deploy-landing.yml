@@ -39,7 +39,12 @@ jobs:
         run: |
           export CLOUDFLARE_API_TOKEN=$(op read "op://DevOps Routines/Cloudflare/CLOUDFLARE_API_TOKEN")
           export CLOUDFLARE_ACCOUNT_ID=$(op read "op://DevOps Routines/Cloudflare/CLOUDFLARE_ACCOUNT_ID")
-          npx --yes wrangler@4 deploy
+          # La API de Cloudflare a veces pide esperar (código 971): hasta 3 intentos.
+          for i in 1 2 3; do
+            npx --yes wrangler@4 deploy && exit 0
+            echo "wrangler deploy falló (intento $i), reintentando"; sleep $((i * 15))
+          done
+          exit 1
 
       - name: Check
         run: |

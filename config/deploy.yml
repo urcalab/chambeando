@@ -52,6 +52,11 @@ volumes:
 
 builder:
   arch: amd64
+  # Caché de capas en el registro, como Wave: un deploy que no toca dependencias ni embed.ts no vuelve
+  # a bajar el modelo de Hugging Face.
+  cache:
+    type: registry
+    options: mode=max,image-manifest=true,oci-mediatypes=true
 
 aliases:
   logs: app logs -f
