@@ -1,6 +1,6 @@
 // Sirve site/ y, en la portada, adapta lo que depende del país del visitante (request.cf.country,
 // que Cloudflare resuelve por IP): el país primero en la tabla de fuentes, la ciudad del chat de ejemplo
-// y la etiqueta del hero. La URL es la misma para todos.
+// y el precio de Chambeando Pro. La URL es la misma para todos.
 
 // Precio de Chambeando Pro: unos 5 USD llevados a un precio redondo en cada moneda
 // (tipo de cambio del 22-11-2026: CLP 1.014, MXN 19,1, PEN 3,44, COP 3.342 por dólar).
@@ -21,7 +21,6 @@ export function personalize(html, country) {
   if (!geo) return html;
   let out = setGeo(html, "city", geo.city);
   out = setGeo(out, "place", geo.place);
-  out = setGeo(out, "badge", `Gratis · en ${geo.name}`);
   out = setGeo(out, "price", geo.price);
   // La fila del país pasa al comienzo de la tabla.
   const row = out.match(new RegExp(`[ \\t]*<tr data-country="${country}">[\\s\\S]*?</tr>\\n?`));

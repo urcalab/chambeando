@@ -12,7 +12,6 @@ test("la portada pone primero el país del visitante y usa su ciudad", () => {
   assert.deepEqual(order(pe), ["PE", "CL", "MX", "CO"]);
   assert.match(pe, /<span data-geo="city">Lima<\/span>/);
   assert.match(pe, /<span data-geo="place">Miraflores, Lima<\/span>/);
-  assert.match(pe, /<span data-geo="badge">Gratis · en Perú<\/span>/);
   assert.match(pe, /<b data-geo="price">S\/ 16\.90<\/b>/);
   assert.match(personalize(html, "CL"), /<b data-geo="price">\$4\.990<\/b>/);
   assert.match(html, /<b data-geo="price">USD 5<\/b>/);
