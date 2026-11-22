@@ -41,6 +41,7 @@
   --bubble-in: #ffffff;
   --bubble-out: #d6f3c4;
   --chat-bg: #e6ebe3;
+  --pro-bg: #12241f; --pro-fg: #edf3ee; --pro-muted: #a3b3ab; --pro-card: #1c342c; --pro-line: #2f4a40;
   --display: "Bricolage Grotesque", "Arial Narrow", system-ui, sans-serif;
   --body: "Instrument Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
@@ -48,12 +49,14 @@
   :root:not([data-theme="light"]) {
     --paper: #0f1a17; --surface: #17251f; --ink: #edf3ee; --muted: #a3b3ab; --line: #2b3b34;
     --marker: #ffd94a; --marker-ink: #12241f; --bubble-in: #223129; --bubble-out: #2f5a3a; --chat-bg: #121d19;
+    --pro-bg: #1a2e27; --pro-fg: #edf3ee; --pro-muted: #a8b9b0; --pro-card: #233b32; --pro-line: #36544a;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --paper: #0f1a17; --surface: #17251f; --ink: #edf3ee; --muted: #a3b3ab; --line: #2b3b34;
   --marker: #ffd94a; --marker-ink: #12241f; --bubble-in: #223129; --bubble-out: #2f5a3a; --chat-bg: #121d19;
+    --pro-bg: #1a2e27; --pro-fg: #edf3ee; --pro-muted: #a8b9b0; --pro-card: #233b32; --pro-line: #36544a;
   color-scheme: dark;
 }
 *, *::before, *::after { box-sizing: border-box; }
@@ -162,19 +165,27 @@ section > h2 { font-size: clamp(1.75rem, 3.6vw, 2.75rem); font-weight: 700; max-
 .sources tbody .num { color: var(--ink); font-weight: 600; }
 .fine { margin-top: 1.25rem; font-size: 0.875rem; color: var(--muted); max-width: 46rem; }
 
-.pro { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr); gap: 1.5rem 3rem; align-items: center; }
-.pro h2 { font-size: clamp(1.75rem, 3.6vw, 2.75rem); font-weight: 700; margin-top: 0.75rem; }
-.pro .intro { margin-top: 1rem; color: var(--muted); max-width: 34rem; }
-.pro ul { list-style: none; margin: 1.25rem 0 0; padding: 0; display: grid; gap: 0.5rem; }
-.pro li { padding-left: 1.6rem; position: relative; }
-.pro li::before { content: "✓"; position: absolute; left: 0; font-weight: 700; }
-.pro-cta { display: flex; flex-direction: column; align-items: flex-start; gap: 0.75rem; padding: 1.5rem; border: 2px dashed var(--line); border-radius: 1rem; }
-.pro-cta button { font: 600 1.0625rem/1 var(--body); padding: 1rem 1.4rem; border-radius: 999px; border: 0; background: var(--ink); color: var(--paper); cursor: pointer; }
-.pro-cta button:disabled { background: var(--marker); color: var(--marker-ink); cursor: default; }
-.pro-cta p { font-size: 0.9375rem; color: var(--muted); }
-.pro-cta .price { font-size: 1.125rem; color: var(--ink); }
-.pro-cta .price b { font: 800 2.5rem/1 var(--display); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
-.pro-cta .price-note { margin-top: -0.25rem; }
+#pro { background: var(--pro-bg); color: var(--pro-fg); border-top: 0; position: relative; overflow: hidden; }
+#pro::before { content: ""; position: absolute; width: 28rem; height: 28rem; right: -8rem; top: -10rem; border-radius: 50%; background: var(--marker); opacity: 0.08; pointer-events: none; }
+.pro { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr); gap: 2rem 3.5rem; align-items: center; position: relative; }
+.pro-tag { display: inline-block; font: 600 0.8125rem/1 var(--body); letter-spacing: 0.1em; text-transform: uppercase; padding: 0.5rem 0.75rem; border-radius: 999px; background: var(--marker); color: var(--marker-ink); }
+.pro h2 { font-size: clamp(2rem, 4.2vw, 3.25rem); font-weight: 800; margin-top: 1rem; max-width: 16ch; }
+.pro h2 mark { background: none; color: var(--marker); padding: 0; }
+.pro .intro { margin-top: 1rem; color: var(--pro-muted); max-width: 34rem; font-size: 1.0625rem; }
+.pro ul { list-style: none; margin: 1.5rem 0 0; padding: 0; display: grid; gap: 0.75rem; }
+.pro li { padding-left: 2.1rem; position: relative; font-size: 1.0625rem; }
+.pro li::before { content: "✓"; position: absolute; left: 0; top: 0.05rem; width: 1.4rem; height: 1.4rem; display: grid; place-items: center; border-radius: 50%; background: var(--marker); color: var(--marker-ink); font: 700 0.8125rem/1 var(--body); }
+.pro-cta { display: flex; flex-direction: column; align-items: stretch; gap: 0.9rem; padding: 2rem; background: var(--pro-card); border: 1px solid var(--pro-line); border-radius: 1.25rem; box-shadow: 0 1.5rem 3rem -1.5rem rgb(0 0 0 / 0.5); }
+.pro-cta .plan { font: 700 1.125rem/1.2 var(--display); }
+.pro-cta .price { color: var(--pro-fg); font-size: 1.125rem; }
+.pro-cta .price b { font: 800 3.25rem/1 var(--display); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.pro-cta .price-note { color: var(--pro-muted); font-size: 0.9375rem; margin-top: -0.4rem; }
+.pro-cta button { font: 700 1.0625rem/1 var(--body); padding: 1.05rem 1.4rem; border-radius: 999px; border: 0; background: var(--marker); color: var(--marker-ink); cursor: pointer; transition: transform 0.15s ease; margin-top: 0.35rem; }
+.pro-cta button:hover { transform: translateY(-2px); }
+.pro-cta button:disabled { background: transparent; color: var(--pro-fg); border: 2px solid var(--marker); cursor: default; transform: none; }
+.pro-cta .fine-print { color: var(--pro-muted); font-size: 0.875rem; text-align: center; }
+.pro-cta #pro-thanks { color: var(--pro-fg); font-weight: 600; text-align: center; }
+#pro :focus-visible { outline-color: var(--marker); }
 .made-in { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 1.5rem 3rem; align-items: start; }
 .made-in h2 { font-size: clamp(1.75rem, 3.6vw, 2.75rem); font-weight: 700; margin-top: 0.75rem; }
 .made-in p:not(.eyebrow) { color: var(--muted); max-width: 30rem; }
@@ -197,13 +208,15 @@ footer { border-top: 1px solid var(--line); padding-block: 1.75rem 2.5rem; color
   .phone { justify-self: center; transform: none; }
   .steps { grid-template-columns: minmax(0, 1fr); gap: 1.75rem; }
   .privacy, .made-in, .pro { grid-template-columns: minmax(0, 1fr); }
+  #pro::before { display: none; }
+  .pro-cta { padding: 1.5rem; }
   .sources table { font-size: 0.9375rem; }
   .sources tbody th { white-space: normal; }
   .sources th, .sources td { padding-right: 0.6rem; }
   section { padding-block: 3rem; }
   .top small { display: none; }
 }
-@media (prefers-reduced-motion: reduce) { .cta { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .cta, .pro-cta button { transition: none; } }
 </style>
 <!--artifact:head-end-->
 </head>
@@ -341,21 +354,22 @@ footer { border-top: 1px solid var(--line); padding-block: 1.75rem 2.5rem; color
   <section id="pro">
     <div class="wrap pro">
       <div>
-        <p class="eyebrow">Próximamente</p>
-        <h2>Chambeando Pro: que el agente postule por ti</h2>
-        <p class="intro">El plan gratis te avisa. Estamos preparando un plan pagado para que el agente haga más por ti:</p>
+        <span class="pro-tag">Próximamente</span>
+        <h2>Chambeando Pro: el agente <mark>postula por ti</mark></h2>
+        <p class="intro">El plan gratis te avisa. Con Pro, el agente hace el resto:</p>
         <ul>
           <li>Te arma un CV a partir de lo que le cuentas</li>
           <li>Lo adapta a cada aviso y te escribe la carta de presentación</li>
-          <li>Postula por ti en los portales, hasta 20 avisos al mes</li>
+          <li>Postula por ti en los portales</li>
         </ul>
       </div>
       <div class="pro-cta">
+        <p class="plan">Chambeando Pro</p>
         <p class="price"><b data-geo="price">USD 5</b> al mes</p>
         <p class="price-note">Hasta 20 postulaciones al mes. Sin permanencia.</p>
         <button type="button" id="pro-interest" data-umami-event="plan-pro-interes">Me interesa</button>
         <p id="pro-thanks" hidden>¡Gracias! Te contamos cuando esté listo.</p>
-        <p>Todavía no está disponible. El plan gratis sigue siendo gratis.</p>
+        <p class="fine-print">Todavía no está disponible. El plan gratis sigue siendo gratis.</p>
       </div>
     </div>
   </section>
