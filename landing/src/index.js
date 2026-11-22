@@ -2,15 +2,18 @@
 // que Cloudflare resuelve por IP): el país primero en la tabla de fuentes, la ciudad del chat de ejemplo
 // y la etiqueta del hero. La URL es la misma para todos.
 
+// Precio de Chambeando Pro: unos 5 USD llevados a un precio redondo en cada moneda
+// (tipo de cambio del 22-11-2026: CLP 1.014, MXN 19,1, PEN 3,44, COP 3.342 por dólar).
 export const GEO = {
-  CL: { name: "Chile", city: "Santiago", place: "Providencia, Región Metropolitana" },
-  MX: { name: "México", city: "Guadalajara", place: "Guadalajara, Jalisco" },
-  PE: { name: "Perú", city: "Lima", place: "Miraflores, Lima" },
-  CO: { name: "Colombia", city: "Medellín", place: "Medellín, Antioquia" },
+  CL: { name: "Chile", city: "Santiago", place: "Providencia, Región Metropolitana", price: "$4.990" },
+  MX: { name: "México", city: "Guadalajara", place: "Guadalajara, Jalisco", price: "$99 MXN" },
+  PE: { name: "Perú", city: "Lima", place: "Miraflores, Lima", price: "S/ 16.90" },
+  CO: { name: "Colombia", city: "Medellín", place: "Medellín, Antioquia", price: "$16.900 COP" },
 };
 
 const setGeo = (html, key, value) =>
-  html.replace(new RegExp(`(<span data-geo="${key}">)[^<]*(</span>)`, "g"), `$1${value}$2`);
+  // Con una función y no con "$1...": un precio como "$16.900" se leería como el grupo $1.
+  html.replace(new RegExp(`(<(span|b) data-geo="${key}">)[^<]*(</\\2>)`, "g"), (_m, open, _tag, close) => open + value + close);
 
 /** La portada para un país. Un país sin servicio (o desconocido) recibe la página tal cual. */
 export function personalize(html, country) {
@@ -19,6 +22,7 @@ export function personalize(html, country) {
   let out = setGeo(html, "city", geo.city);
   out = setGeo(out, "place", geo.place);
   out = setGeo(out, "badge", `Gratis · en ${geo.name}`);
+  out = setGeo(out, "price", geo.price);
   // La fila del país pasa al comienzo de la tabla.
   const row = out.match(new RegExp(`[ \\t]*<tr data-country="${country}">[\\s\\S]*?</tr>\\n?`));
   const body = out.indexOf("<tbody>");

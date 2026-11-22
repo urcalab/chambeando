@@ -13,6 +13,11 @@ test("la portada pone primero el país del visitante y usa su ciudad", () => {
   assert.match(pe, /<span data-geo="city">Lima<\/span>/);
   assert.match(pe, /<span data-geo="place">Miraflores, Lima<\/span>/);
   assert.match(pe, /<span data-geo="badge">Gratis · en Perú<\/span>/);
+  assert.match(pe, /<b data-geo="price">S\/ 16\.90<\/b>/);
+  assert.match(personalize(html, "CL"), /<b data-geo="price">\$4\.990<\/b>/);
+  assert.match(html, /<b data-geo="price">USD 5<\/b>/);
+  assert.match(personalize(html, "CO"), /<b data-geo="price">\$16\.900 COP<\/b>/);
+  assert.match(personalize(html, "MX"), /<b data-geo="price">\$99 MXN<\/b>/);
   assert.equal(personalize(html, "CL").length > 0, true);
   assert.deepEqual(order(personalize(html, "CO")), ["CO", "CL", "MX", "PE"]);
 });
