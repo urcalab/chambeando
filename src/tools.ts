@@ -149,6 +149,23 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
       };
     },
 
+    /** Lo que tenemos guardado de la persona, para mostrárselo. */
+    async ver_perfil(input: unknown) {
+      const p = z.object({ phone: Phone }).parse(input);
+      const user = requireUser(db, p.phone);
+      const count = (status: string) =>
+        (db.prepare("SELECT COUNT(*) AS n FROM deliveries WHERE phone = ? AND status = ?").get(p.phone, status) as { n: number }).n;
+      return {
+        preferencias: {
+          pais: COUNTRIES[user.country], nombre: user.name, resumen: user.summary, estudios: user.studies,
+          primer_trabajo: user.first_job, tipos: user.job_kinds, cargos: user.roles, regiones: user.regions,
+          modalidades: user.modalities, sueldo_minimo: user.min_salary, excluir: user.exclude,
+        },
+        avisos_automaticos: user.active ? "activos" : "en pausa",
+        avisos_enviados: count("sent"),
+      };
+    },
+
     /** Búsqueda a pedido entre los avisos guardados; `consulta` y `region` son opcionales. */
     async buscar_avisos(input: unknown) {
       const p = z

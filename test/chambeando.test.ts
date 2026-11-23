@@ -247,6 +247,13 @@ test("flujo completo: registro, match de avisos nuevos, envío, opinión y borra
   // Solo el contador de la RM: el de Biobío cae por región y la enfermera por el modelo.
   assert.deepEqual(saved.avisos.map((a) => a.id), ["a"]);
 
+  const perfil = await tools.ver_perfil({ phone });
+  assert.equal(perfil.preferencias.resumen, "busco de contador");
+  assert.deepEqual(perfil.preferencias.regiones, ["metropolitana"]);
+  assert.equal(perfil.avisos_automaticos, "activos");
+  assert.equal(perfil.avisos_enviados, 1);
+  await assert.rejects(tools.ver_perfil({ phone: "+56900000077" }), /todavía no ha dicho/);
+
   // Actualizar un campo conserva los demás.
   const updated = await tools.guardar_preferencias({ phone, sueldo_minimo: 800000 });
   assert.equal(updated.nuevo, false);

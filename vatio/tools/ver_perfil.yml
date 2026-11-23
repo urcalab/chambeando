@@ -1,0 +1,19 @@
+# ver_perfil
+description: Muestra lo que tenemos guardado de la persona (su perfil de búsqueda), si los avisos automáticos están activos y cuántos avisos le hemos mandado.
+when_to_use: La persona pregunta qué tienes guardado de ella, cómo quedó su perfil o qué estás buscando por ella.
+parameters:
+  type: object
+  properties: {}
+access: public
+request:
+  method: POST
+  path: /tools/ver_perfil
+  requires: [contact.phone_number]
+  body:
+    phone: "$contact.phone_number"
+respond:
+  data:
+    preferencias: "$.preferencias"
+    avisos_automaticos: "$.avisos_automaticos"
+    avisos_enviados: "$.avisos_enviados"
+  message: Este es el perfil guardado.
