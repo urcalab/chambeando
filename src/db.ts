@@ -109,6 +109,33 @@ CREATE TABLE IF NOT EXISTS deliveries (
   PRIMARY KEY (phone, job_id)
 );
 CREATE INDEX IF NOT EXISTS deliveries_status ON deliveries(status);
+
+-- Registro forense de cada llamada a la API (menos /health y la landing). El teléfono va como hash.
+CREATE TABLE IF NOT EXISTS api_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  at TEXT NOT NULL,
+  method TEXT NOT NULL,
+  path TEXT NOT NULL,
+  status INTEGER NOT NULL,
+  ms INTEGER NOT NULL,
+  caller TEXT NOT NULL,
+  ip TEXT,
+  phone_id TEXT,
+  error TEXT
+);
+CREATE INDEX IF NOT EXISTS api_log_at ON api_log(at);
+-- Que nadie, ni el propio backend, edite el registro: solo se agregan filas o se borran las vencidas.
+CREATE TRIGGER IF NOT EXISTS api_log_no_update BEFORE UPDATE ON api_log
+BEGIN SELECT RAISE(ABORT, 'api_log es de solo agregar'); END;
+
+-- Una fila por corrida horaria, con lo que trajo cada fuente, el match y los envíos.
+CREATE TABLE IF NOT EXISTS ingest_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  started_at TEXT NOT NULL,
+  finished_at TEXT,
+  result TEXT,
+  error TEXT
+);
 `;
 
 export function openDb(path: string): DatabaseSync {

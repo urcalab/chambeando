@@ -38,6 +38,7 @@ env:
     - BACKEND_API_KEY
     - LLM_API_KEY
     - VATIO_SERVER_KEY
+    - ADMIN_API_KEY
   clear:
     PORT: "8787"
     DB_PATH: /app/data/chambeando.db

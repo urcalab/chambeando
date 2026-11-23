@@ -4,6 +4,10 @@ const int = (v: string | undefined, d: number) => (v ? Number.parseInt(v, 10) : 
 export const config = {
   port: int(env.PORT, 8787),
   backendApiKey: env.BACKEND_API_KEY ?? "",
+  /** Clave de la consola de admin (/admin/*). Vacía: la consola queda apagada. */
+  adminApiKey: env.ADMIN_API_KEY ?? "",
+  /** Días que se guarda el registro de llamadas a la API. */
+  apiLogRetentionDays: Number.parseInt(env.API_LOG_RETENTION_DAYS ?? "180", 10),
   /** URL pública del backend, sin "/" final. Con ella los links a avisos pasan por /r/<token> para contar clics. */
   publicUrl: (env.PUBLIC_URL ?? "").replace(/\/+$/, ""),
   dbPath: env.DB_PATH ?? "data/chambeando.db",

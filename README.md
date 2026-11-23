@@ -155,6 +155,25 @@ caracteres ambiguos para que el agente lo copie bien. El agente además pregunta
 persona postuló. `GET /stats?days=7` (con la clave del backend) muestra el embudo completo por portal y los
 últimos motivos de "no me sirve".
 
+## Consola de admin y registro forense
+
+`/admin/*` es una API de solo lectura con su propia clave (`ADMIN_API_KEY`), distinta de la que usa Vatio. Sin esa
+clave configurada, responde 503. Los teléfonos nunca salen completos: cada persona se identifica por un hash y se
+muestra enmascarada (`+56 9 •••• 4110`).
+
+| Ruta | Qué devuelve |
+|---|---|
+| `GET /admin/overview?days=7` | Embudo, series por día, personas y avisos por país, última corrida |
+| `GET /admin/sources` | Avisos por fuente, nuevos en 24 h, duplicados y resultado de la última corrida |
+| `GET /admin/users?limit=100` | Personas con su perfil y cuántos avisos recibieron, abrieron y calificaron |
+| `GET /admin/users/:id` | Una persona y cada aviso que se evaluó para ella, con el motivo del juez |
+| `GET /admin/runs?limit=24` | Corridas horarias: qué trajo cada fuente, el match y los envíos |
+| `GET /admin/log?limit=200&path=&caller=&status=` | Registro de llamadas a la API |
+
+Cada llamada a la API (herramientas, consola, estadísticas, links `/r/`) queda en la tabla `api_log`: fecha, método,
+ruta, respuesta, duración, quién llamó (`backend`, `admin` o `anon`), IP y el hash del teléfono si la llamada trae
+uno. Un trigger impide editar filas; solo se borran las de más de 180 días (`API_LOG_RETENTION_DAYS`).
+
 ## Correr
 
     cp .env.example .env    # completar

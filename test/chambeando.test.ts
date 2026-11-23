@@ -7,6 +7,9 @@ import { DatabaseSync } from "node:sqlite";
 import { config } from "../src/config.ts";
 import { now, openDb, toBlob } from "../src/db.ts";
 import { linkToken, recordClick, stats } from "../src/feedback.ts";
+import { maskPhone, phoneId } from "../src/admin.ts";
+import { createApp } from "../src/server.ts";
+import type { AddressInfo } from "node:net";
 import { dedupeKey, ingest, localityOf, sameLocality } from "../src/ingest.ts";
 import type { Embedder } from "../src/embed.ts";
 import { parseVerdicts, type Judge } from "../src/llm.ts";
@@ -477,6 +480,56 @@ test("una base de la versión anterior recibe las columnas nuevas al abrirse", (
   const db = openDb(path);
   const cols = (db.prepare("PRAGMA table_info(deliveries)").all() as Array<{ name: string }>).map((c) => c.name);
   for (const c of ["applied", "token", "clicks", "first_click_at"]) assert.ok(cols.includes(c), c);
+});
+
+test("consola de admin: su propia clave, solo lectura, sin teléfonos, y cada llamada queda registrada", async () => {
+  const db = openDb(":memory:");
+  await addJob(db, { id: "a", title: "Contador general" });
+  const server = createApp(db, fakeEmbed, "clave-backend", null, "clave-admin").listen(0);
+  const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  const call = (path: string, key: string, init: RequestInit = {}) =>
+    fetch(base + path, { ...init, headers: { authorization: `Bearer ${key}`, "content-type": "application/json", ...(init.headers ?? {}) } });
+  try {
+    const phone = "+56948454110";
+    assert.equal((await call("/tools/guardar_preferencias", "clave-backend", { method: "POST", body: JSON.stringify({ phone, resumen: "contador" }) })).status, 200);
+    // La clave de Vatio no abre la consola, ni la de la consola las herramientas.
+    assert.equal((await call("/admin/overview", "clave-backend")).status, 401);
+    assert.equal((await call("/tools/ver_perfil", "clave-admin", { method: "POST", body: "{}" })).status, 401);
+    assert.equal((await call("/admin/overview", "clave-admin", { method: "POST" })).status, 405);
+
+    const overview = await (await call("/admin/overview?days=7", "clave-admin")).json();
+    assert.equal(overview.funnel.sent, 1);
+    assert.equal(overview.users_by_country[0].country, "CL");
+    const users = await (await call("/admin/users", "clave-admin")).json();
+    assert.equal(users[0].phone, "+56 9 •••• 4110");
+    assert.equal(users[0].id, phoneId(phone));
+    const detail = await (await call(`/admin/users/${users[0].id}`, "clave-admin")).json();
+    assert.equal(detail.deliveries[0].job_id, "a");
+    assert.ok(!JSON.stringify([overview, users, detail]).includes("48454110"), "un teléfono completo salió de la consola");
+
+    const log = await (await call("/admin/log?limit=50", "clave-admin")).json();
+    const tool = log.find((l: any) => l.path === "/tools/guardar_preferencias");
+    assert.equal(tool.caller, "backend");
+    assert.equal(tool.status, 200);
+    assert.equal(tool.phone_id, phoneId(phone));
+    assert.ok(log.some((l: any) => l.path === "/admin/overview" && l.status === 401 && l.caller === "anon"));
+    assert.ok(!JSON.stringify(log).includes("48454110"));
+    // El registro no se puede editar.
+    assert.throws(() => db.prepare("UPDATE api_log SET status = 200").run(), /solo agregar/);
+  } finally {
+    server.close();
+  }
+  assert.equal(maskPhone("+5215512345678"), "+52 1 •••• 5678");
+});
+
+test("sin ADMIN_API_KEY la consola queda apagada", async () => {
+  const server = createApp(openDb(":memory:"), fakeEmbed, "k", null, "").listen(0);
+  try {
+    const res = await fetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}/admin/overview`, { headers: { authorization: "Bearer " } });
+    assert.equal(res.status, 503);
+  } finally {
+    server.close();
+  }
 });
 
 test("si el modelo falla, los avisos se reintentan en la próxima corrida", async () => {

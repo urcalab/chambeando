@@ -8,7 +8,9 @@ import { runCycle } from "./cycle.ts";
 import { openDb } from "./db.ts";
 import { llmJudge, type Judge } from "./llm.ts";
 import { localEmbedder, type Embedder } from "./embed.ts";
+import { createAdmin, logCall } from "./admin.ts";
 import { recordClick, stats } from "./feedback.ts";
+import { normalizePhone } from "./text.ts";
 import { ToolError, createTools } from "./tools.ts";
 
 function authorized(req: IncomingMessage, key: string): boolean {
@@ -45,12 +47,43 @@ const LANDING = (() => {
   }
 })();
 
-export function createApp(db: DatabaseSync, embed: Embedder, apiKey: string, judge: Judge | null = null) {
+function clientIp(req: IncomingMessage): string | null {
+  const h = (name: string) => {
+    const v = req.headers[name];
+    return Array.isArray(v) ? v[0] : v;
+  };
+  return h("cf-connecting-ip") ?? h("x-forwarded-for")?.split(",")[0]?.trim() ?? req.socket.remoteAddress ?? null;
+}
+
+const num = (v: string | null, fallback: number, max: number) => Math.min(Math.max(Number(v) || fallback, 1), max);
+
+export function createApp(
+  db: DatabaseSync,
+  embed: Embedder,
+  apiKey: string,
+  judge: Judge | null = null,
+  adminKey = config.adminApiKey,
+) {
   const tools = createTools(db, embed, judge);
+  const admin = createAdmin(db);
   return createServer(async (req, res) => {
+    const started = performance.now();
+    const url = new URL(req.url ?? "/", "http://x");
+    const path = url.pathname;
+    // Para el registro forense: quién llamó y, si la llamada trae un teléfono, a quién se refiere.
+    const audit: { caller: string; phone: string | null; error: string | null; skip: boolean } = {
+      caller: "anon", phone: null, error: null, skip: path === "/health" || path === "/" || path === "/index.html",
+    };
+    res.on("finish", () => {
+      if (audit.skip) return;
+      try {
+        logCall(db, { method: req.method ?? "?", path: path + url.search, status: res.statusCode, ms: performance.now() - started,
+          caller: audit.caller, ip: clientIp(req), phone: audit.phone, error: audit.error });
+      } catch (e) {
+        console.error("no se pudo registrar la llamada:", e);
+      }
+    });
     try {
-      const url = new URL(req.url ?? "/", "http://x");
-      const path = url.pathname;
       if ((req.method === "GET" || req.method === "HEAD") && (path === "/" || path === "/index.html") && LANDING) {
         res.writeHead(200, { "content-type": "text/html; charset=utf-8", "cache-control": "public, max-age=300" });
         return res.end(req.method === "HEAD" ? undefined : LANDING);
@@ -70,18 +103,46 @@ export function createApp(db: DatabaseSync, embed: Embedder, apiKey: string, jud
         res.writeHead(302, { location: target, "cache-control": "no-store", "referrer-policy": "no-referrer" });
         return res.end();
       }
+      if (path.startsWith("/admin/")) {
+        if (!adminKey) return send(res, 503, { error: "La consola está apagada: falta ADMIN_API_KEY" });
+        if (!authorized(req, adminKey)) return send(res, 401, { error: "No autorizado" });
+        audit.caller = "admin";
+        if (req.method !== "GET") return send(res, 405, { error: "La consola es de solo lectura" });
+        const q = url.searchParams;
+        if (path === "/admin/overview") return send(res, 200, admin.overview(num(q.get("days"), 7, 90)));
+        if (path === "/admin/sources") return send(res, 200, admin.sources());
+        if (path === "/admin/users") return send(res, 200, admin.users(num(q.get("limit"), 100, 1000)));
+        const userId = path.match(/^\/admin\/users\/([0-9a-f]{16})$/)?.[1];
+        if (userId) {
+          const user = admin.user(userId);
+          return user ? send(res, 200, user) : send(res, 404, { error: "No existe" });
+        }
+        if (path === "/admin/runs") return send(res, 200, admin.runs(num(q.get("limit"), 24, 500)));
+        if (path === "/admin/log") {
+          return send(res, 200, admin.log({
+            limit: num(q.get("limit"), 200, 2000), path: q.get("path") ?? undefined,
+            caller: q.get("caller") ?? undefined, status: Number(q.get("status")) || undefined,
+          }));
+        }
+        return send(res, 404, { error: "No existe" });
+      }
       if (!authorized(req, apiKey)) return send(res, 401, { error: "No autorizado" });
+      audit.caller = "backend"; // la clave que usa Vatio para las herramientas
       if (req.method === "GET" && path === "/stats") {
         const days = Math.min(Math.max(Number(url.searchParams.get("days")) || 7, 1), 90);
         return send(res, 200, stats(db, days));
       }
       const name = path.match(/^\/tools\/([a-z_]+)$/)?.[1];
       if (req.method === "POST" && name && Object.hasOwn(tools, name)) {
-        return send(res, 200, await tools[name as keyof typeof tools](await readJson(req)));
+        const body = await readJson(req);
+        const phone = (body as { phone?: unknown })?.phone;
+        if (typeof phone === "string") audit.phone = normalizePhone(phone);
+        return send(res, 200, await tools[name as keyof typeof tools](body));
       }
       if (req.method === "POST" && path === "/run") return send(res, 200, await runCycle(db, embed));
       send(res, 404, { error: "No existe" });
     } catch (e) {
+      audit.error = (e as Error).message;
       if (e instanceof ToolError) return send(res, e.status, { error: e.message });
       if (e instanceof ZodError) {
         return send(res, 422, { error: e.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; ") });

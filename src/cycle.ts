@@ -1,5 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import { config } from "./config.ts";
+import { now } from "./db.ts";
 import type { Embedder } from "./embed.ts";
 import { ingest } from "./ingest.ts";
 import { llmJudge } from "./llm.ts";
@@ -31,14 +32,24 @@ let running = false;
 export async function runCycle(db: DatabaseSync, embed: Embedder) {
   if (running) return { skipped: "ya hay una corrida en curso" };
   running = true;
+  const run = db.prepare("INSERT INTO ingest_runs (started_at) VALUES (?)").run(now()).lastInsertRowid;
   try {
     const ingested = await ingest(db, embed, sources());
     const matched = await matchAll(db, config.llm.apiKey ? llmJudge : null);
     const notified = config.vatio.serverKey
       ? await notifyAll(db, vatioSender)
       : { skipped: "falta VATIO_SERVER_KEY: los avisos quedan pendientes" };
-    return { ingested, matched, notified };
+    const result = { ingested, matched, notified };
+    db.prepare("UPDATE ingest_runs SET finished_at = ?, result = ? WHERE id = ?").run(now(), JSON.stringify(result), run);
+    return result;
+  } catch (e) {
+    db.prepare("UPDATE ingest_runs SET finished_at = ?, error = ? WHERE id = ?").run(now(), (e as Error).message, run);
+    throw e;
   } finally {
+    // Retención: corridas y registro de llamadas de más de API_LOG_RETENTION_DAYS días.
+    const cutoff = new Date(Date.now() - config.apiLogRetentionDays * 86_400_000).toISOString();
+    db.prepare("DELETE FROM api_log WHERE at < ?").run(cutoff);
+    db.prepare("DELETE FROM ingest_runs WHERE started_at < ?").run(cutoff);
     running = false;
   }
 }
