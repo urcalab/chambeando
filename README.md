@@ -131,9 +131,6 @@ La primera corrida trae solo la primera página de cada región (unos 20 avisos)
 
 `node src/cli.ts counts` muestra cuántos avisos declara cada portal; de ahí sale la tabla de la landing.
 
-**Computrabajo responde 403 desde el servidor de producción.** Estado, decisión y salidas en
-[`docs/computrabajo.md`](docs/computrabajo.md).
-
 ## Duplicados
 
 El mismo aviso puede estar en dos portales o republicarse con otro id. Al guardar, cada aviso recibe una
