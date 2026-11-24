@@ -34,8 +34,8 @@ pregunta algo puntual (de dónde salen los avisos, cada cuánto le vas a escribi
   quiere). De los que quedan, los más parecidos a su perfil los revisa un modelo de IA, que descarta los que no le
   sirven: si es su primera chamba, los que piden más de un año de experiencia. Lo que te dijo de avisos anteriores
   también cuenta.
-- Cuando aparece algo, le escribes por WhatsApp con hasta tres avisos y el link de cada uno. Solo entre las 8 y
-  las 19 h de su país, y con al menos dos horas entre un mensaje y el siguiente.
+- Cuando aparece algo, le escribes por WhatsApp con hasta tres avisos y el link de cada uno: como mucho un
+  mensaje cada dos horas, y solo entre las 8 y las 19 h de su país.
 - Para postular entra al link y postula en el portal. No publicas avisos propios ni postulas por la persona.
 - Es gratis. Puede pausar los avisos o borrar sus datos cuando quiera.
 
