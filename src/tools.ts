@@ -7,7 +7,7 @@ import type { Judge } from "./llm.ts";
 import { pastFeedback, rank, userText } from "./match.ts";
 import { jobLink } from "./feedback.ts";
 import { markSent, pendingJobs } from "./notify.ts";
-import { COUNTRIES, ENABLED_COUNTRIES, JOB_KINDS, publishedAgo, countryOf, countryOfPhone, normalizePhone, regionOf, type Country, type JobKind, type Modality } from "./text.ts";
+import { COUNTRIES, ENABLED_COUNTRIES, FREQUENCIES, JOB_KINDS, publishedAgo, countryOf, countryOfPhone, normalizePhone, regionOf, type Country, type JobKind, type Modality } from "./text.ts";
 
 const SUPPORTED = `Países disponibles: ${ENABLED_COUNTRIES.map((c) => COUNTRIES[c]).join(", ")}.`;
 
@@ -52,6 +52,14 @@ function present(j: Job, phone: string) {
     url: jobLink(phone, j),
     extracto: j.description.slice(0, 280),
   };
+}
+
+/** Cada cuánto le llegan los avisos automáticos, en palabras para la persona. */
+export function frequencyLabel(u: Pick<User, "frequency" | "notify_hour">): string {
+  const hour = `${u.notify_hour ?? config.defaultNotifyHour}:00`;
+  if (u.frequency === "diaria") return `una vez al día, desde las ${hour}`;
+  if (u.frequency === "semanal") return `una vez a la semana, los lunes desde las ${hour}`;
+  return `apenas aparecen, como mucho un mensaje cada ${config.minHoursBetweenMessages} horas`;
 }
 
 function requireUser(db: DatabaseSync, phone: string): User {
@@ -187,7 +195,7 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
           primer_trabajo: user.first_job, tipos: user.job_kinds, cargos: user.roles, regiones: user.regions,
           modalidades: user.modalities, sueldo_minimo: user.min_salary, excluir: user.exclude,
         },
-        avisos_automaticos: user.active ? "activos" : "en pausa",
+        avisos_automaticos: user.active ? `activos: ${frequencyLabel(user)}` : "en pausa",
         avisos_enviados: count("sent"),
       };
     },
@@ -233,6 +241,22 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
          WHERE phone = ? AND job_id = ?`,
       ).run(p.util || p.postulo ? 1 : 0, p.postulo === undefined ? null : p.postulo ? 1 : 0, p.motivo ?? null, p.phone, jobId);
       return { registrado: true };
+    },
+
+    /** Cada cuánto quiere los avisos automáticos y, si es diaria o semanal, desde qué hora. No toca lo demás del perfil. */
+    async frecuencia_avisos(input: unknown) {
+      const p = z
+        .object({ phone: Phone, frecuencia: z.enum(FREQUENCIES), hora: z.number().int().nullable().optional() })
+        .parse(input);
+      const user = requireUser(db, p.phone);
+      const [from, to] = config.sendHours;
+      if (p.hora != null && (p.hora < from || p.hora >= to)) {
+        throw new ToolError(422, `La hora tiene que ser entre las ${from} y las ${to - 1}: fuera de ese horario no mandamos mensajes.`);
+      }
+      // La hora solo cuenta si es diaria o semanal; si no la dice, se conserva la que tenía.
+      const hour = p.frecuencia === "apenas" ? null : p.hora !== undefined ? p.hora : user.notify_hour;
+      db.prepare("UPDATE users SET frequency = ?, notify_hour = ?, updated_at = ? WHERE phone = ?").run(p.frecuencia, hour, now(), p.phone);
+      return { frecuencia: frequencyLabel({ frequency: p.frecuencia, notify_hour: hour }), activo: user.active };
     },
 
     /** Pausa o reanuda los avisos automáticos. */

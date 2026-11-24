@@ -159,6 +159,12 @@ hora. El tipo de trabajo es un filtro duro: se lee de la jornada del aviso y, pa
 título (`jobKind` en `src/text.ts`). A quien busca su primer trabajo, el modelo le descarta los avisos que piden
 más de un año de experiencia.
 
+Cada persona elige cada cuánto le llegan los avisos automáticos con `frecuencia_avisos`, aparte del perfil para no
+volver a cruzar avisos: `apenas` (por defecto: como mucho un mensaje cada 2 horas), `diaria` o `semanal` (los
+lunes), desde la hora que diga, de 8 a 18 (por defecto, 9). Todo dentro del horario de envío, de 8 a 19 h en su
+país (`canMessageNow` en `src/notify.ts`). Cada mensaje trae hasta 3 avisos y ofrece los que no caben. Fuera de la
+ventana de 24 horas de WhatsApp sale como máximo una plantilla al día, sea cual sea la frecuencia.
+
 ## Feedback de las recomendaciones
 
 Cada link que recibe una persona pasa por `/r/<token>` antes de llegar al portal, así que se cuenta quién abrió

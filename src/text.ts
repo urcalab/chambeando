@@ -179,6 +179,13 @@ export function modalityOf(text: string | null | undefined): Modality | null {
   return null;
 }
 
+/**
+ * Cada cuánto quiere los avisos automáticos: apenas aparezcan (con el mínimo entre mensajes), una vez al día o una
+ * vez a la semana (los lunes), desde su hora.
+ */
+export const FREQUENCIES = ["apenas", "diaria", "semanal"] as const;
+export type Frequency = (typeof FREQUENCIES)[number];
+
 export const JOB_KINDS = ["practica", "part_time", "full_time"] as const;
 export type JobKind = (typeof JOB_KINDS)[number];
 

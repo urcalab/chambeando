@@ -23,13 +23,15 @@ export function formatJob(j: Job, link: string, n?: number, ago?: string | null)
     .join("\n");
 }
 
-export function formatMessage(jobs: Job[], phone: string): string {
+/** `more`: los avisos pendientes que no caben en este mensaje; se ofrecen para que los pida. */
+export function formatMessage(jobs: Job[], phone: string, more = 0): string {
   const head = jobs.length === 1 ? "Encontré un aviso nuevo para ti:" : `Encontré ${jobs.length} avisos nuevos para ti:`;
   return [
     head,
     ...jobs.map((j, i) => formatJob(j, jobLink(phone, j), i + 1, publishedAgo(j.published_at, j.country))),
+    more > 0 ? `Tengo ${more} ${more === 1 ? "aviso más" : "avisos más"} para ti: pídemelos cuando quieras.` : null,
     "¿Te sirve alguno? Respóndeme con el número, o dime cuál no y por qué, y afino la búsqueda.",
-  ].join("\n\n");
+  ].filter(Boolean).join("\n\n");
 }
 
 export type SendResult = "sent" | "template" | "outside_window" | "failed";
@@ -103,15 +105,25 @@ export async function notifyAll(
 }
 
 /**
- * Si se le puede escribir ahora: dentro del horario de su país (8 a 19 h) y al menos 2 horas después del último
- * mensaje automático. Lo que no sale ahora queda pendiente para la próxima corrida.
+ * Si se le puede escribir ahora: dentro del horario de su país (8 a 19 h) y según la frecuencia que eligió.
+ * - apenas: al menos 2 horas después del último mensaje automático.
+ * - diaria: desde su hora, si hoy (en su país) todavía no se le escribió.
+ * - semanal: lo mismo, solo los lunes.
+ * Lo que no sale ahora queda pendiente para la próxima corrida.
  */
-export function canMessageNow(user: Pick<User, "country" | "last_notified_at">, at = new Date()): boolean {
-  const { hour } = localNow(user.country, at);
+export function canMessageNow(
+  user: Pick<User, "country" | "last_notified_at"> & Partial<Pick<User, "frequency" | "notify_hour">>,
+  at = new Date(),
+): boolean {
+  const { hour, date } = localNow(user.country, at);
   const [from, to] = config.sendHours;
   if (hour < from || hour >= to) return false;
-  const last = user.last_notified_at ? Date.parse(user.last_notified_at) : 0;
-  return at.getTime() - last >= config.minHoursBetweenMessages * 3_600_000;
+  const last = user.last_notified_at ? Date.parse(user.last_notified_at) : null;
+  const frequency = user.frequency ?? "apenas";
+  if (frequency === "apenas") return last === null || at.getTime() - last >= config.minHoursBetweenMessages * 3_600_000;
+  if (hour < (user.notify_hour ?? config.defaultNotifyHour)) return false;
+  if (frequency === "semanal" && new Date(`${date}T12:00:00Z`).getUTCDay() !== 1) return false;
+  return last === null || localNow(user.country, new Date(last)).date !== date;
 }
 
 export function pendingJobs(db: DatabaseSync, phone: string, limit: number): Job[] {
@@ -137,7 +149,8 @@ export function markSent(db: DatabaseSync, phone: string, jobIds: string[]): voi
 }
 
 async function sendTo(db: DatabaseSync, user: User, jobs: Job[], send: Sender): Promise<SendResult> {
-  const text = formatMessage(jobs, user.phone);
+  const total = (db.prepare("SELECT COUNT(*) AS n FROM deliveries WHERE phone = ? AND status = 'pending'").get(user.phone) as { n: number }).n;
+  const text = formatMessage(jobs, user.phone, total - jobs.length);
   const key = createHash("sha256").update(`${user.phone}|${jobs.map((j) => j.id).join(",")}`).digest("hex").slice(0, 32);
 
   const first = await send({ to: user.phone, text, key });
@@ -155,7 +168,6 @@ async function sendTo(db: DatabaseSync, user: User, jobs: Job[], send: Sender): 
   const lastTemplate = user.last_template_at ? Date.parse(user.last_template_at) : 0;
   if (Date.now() - lastTemplate < DAY) return "outside_window";
 
-  const total = (db.prepare("SELECT COUNT(*) AS n FROM deliveries WHERE phone = ? AND status = 'pending'").get(user.phone) as { n: number }).n;
   const second = await send({
     to: user.phone,
     text,

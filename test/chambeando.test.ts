@@ -255,7 +255,7 @@ test("flujo completo: registro, match de avisos nuevos, envío, opinión y borra
   const perfil = await tools.ver_perfil({ phone });
   assert.equal(perfil.preferencias.resumen, "busco de contador");
   assert.deepEqual(perfil.preferencias.regiones, ["metropolitana"]);
-  assert.equal(perfil.avisos_automaticos, "activos");
+  assert.equal(perfil.avisos_automaticos, "activos: apenas aparecen, como mucho un mensaje cada 2 horas");
   assert.equal(perfil.avisos_enviados, 1);
   await assert.rejects(tools.ver_perfil({ phone: "+56900000077" }), /todavía no ha dicho/);
 
@@ -664,4 +664,47 @@ test("un perfil que pide una región que nadie pedía la trae en segundo plano",
   await tools.guardar_preferencias({ phone: "+56955556666", resumen: "bodeguero" });
   assert.deepEqual(calls.slice(0, 5), [["valparaiso"], [], ["biobio"], [], ["biobio"]]);
   assert.equal(calls[5]!.length, 12);
+});
+
+test("frecuencia: una vez al día o a la semana, desde su hora", () => {
+  // En Santiago es UTC-3; el 24-11-2026 es martes y el 30-11-2026, lunes.
+  const at = (utc: string) => new Date(utc);
+  const daily = { country: "CL" as const, frequency: "diaria" as const, notify_hour: null, last_notified_at: null };
+  assert.equal(canMessageNow(daily, at("2026-11-24T11:30:00Z")), false); // 8:30, antes de las 9
+  assert.equal(canMessageNow(daily, at("2026-11-24T12:00:00Z")), true); // 9:00
+  // Ya se le escribió hoy: hasta mañana, aunque pasen más de 2 horas.
+  assert.equal(canMessageNow({ ...daily, last_notified_at: "2026-11-24T12:00:00Z" }, at("2026-11-24T20:00:00Z")), false);
+  assert.equal(canMessageNow({ ...daily, last_notified_at: "2026-11-24T12:00:00Z" }, at("2026-11-25T12:00:00Z")), true);
+  // A la hora que pidió.
+  assert.equal(canMessageNow({ ...daily, notify_hour: 16 }, at("2026-11-24T18:00:00Z")), false); // 15:00
+  assert.equal(canMessageNow({ ...daily, notify_hour: 16 }, at("2026-11-24T19:00:00Z")), true); // 16:00
+  // Semanal: solo los lunes, una vez.
+  const weekly = { ...daily, frequency: "semanal" as const };
+  assert.equal(canMessageNow(weekly, at("2026-11-24T12:00:00Z")), false);
+  assert.equal(canMessageNow(weekly, at("2026-11-30T12:00:00Z")), true);
+  assert.equal(canMessageNow({ ...weekly, last_notified_at: "2026-11-30T12:00:00Z" }, at("2026-11-30T18:00:00Z")), false);
+  // El horario de envío vale para todas.
+  assert.equal(canMessageNow({ ...daily, notify_hour: 18 }, at("2026-11-24T22:30:00Z")), false); // 19:30
+});
+
+test("frecuencia de los avisos: se guarda sin tocar lo pendiente y se ve en el perfil", async () => {
+  const db = openDb(":memory:");
+  const tools = createTools(db, fakeEmbed, null);
+  const phone = "+56977778888";
+  await tools.guardar_preferencias({ phone, resumen: "vendedor", regiones: ["Metropolitana"] });
+  await addJob(db, { id: "otro", title: "Vendedor tienda" });
+  db.prepare("INSERT INTO deliveries (phone, job_id, status, created_at) VALUES (?, 'otro', 'pending', ?)").run(phone, now());
+  assert.deepEqual(await tools.frecuencia_avisos({ phone, frecuencia: "diaria", hora: 16 }), { frecuencia: "una vez al día, desde las 16:00", activo: true });
+  assert.equal((await tools.ver_perfil({ phone })).avisos_automaticos, "activos: una vez al día, desde las 16:00");
+  // Sin hora conserva la que tenía; "apenas" no usa hora.
+  assert.equal((await tools.frecuencia_avisos({ phone, frecuencia: "semanal" })).frecuencia, "una vez a la semana, los lunes desde las 16:00");
+  assert.equal((await tools.frecuencia_avisos({ phone, frecuencia: "apenas" })).frecuencia, "apenas aparecen, como mucho un mensaje cada 2 horas");
+  assert.equal((await tools.frecuencia_avisos({ phone, frecuencia: "diaria" })).frecuencia, "una vez al día, desde las 9:00");
+  await assert.rejects(tools.frecuencia_avisos({ phone, frecuencia: "diaria", hora: 21 }), /entre las 8 y las 18/);
+  const pending = db.prepare("SELECT COUNT(*) AS n FROM deliveries WHERE phone = ? AND status = 'pending'").get(phone) as { n: number };
+  assert.equal(pending.n, 1);
+  // El mensaje automático ofrece los que no caben.
+  const job = { id: "a", title: "Diseñador", company: "X", location: "Viña", modality: null, salary: null, url: "https://x", published_at: null, country: "CL" } as any;
+  assert.match(formatMessage([job], phone, 4), /Tengo 4 avisos más para ti/);
+  assert.doesNotMatch(formatMessage([job], phone), /más para ti/);
 });

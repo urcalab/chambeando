@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import type { Country, JobKind, Modality } from "./text.ts";
+import type { Country, Frequency, JobKind, Modality } from "./text.ts";
 
 export type Job = {
   id: string;
@@ -39,6 +39,9 @@ export type User = {
   min_salary: number | null;
   exclude: string[];
   active: boolean;
+  /** Cada cuánto quiere los avisos automáticos, y desde qué hora local si es diaria o semanal (null: la de siempre). */
+  frequency: Frequency;
+  notify_hour: number | null;
   matched_until: string;
   last_template_at: string | null;
   last_notified_at: string | null;
@@ -86,6 +89,8 @@ CREATE TABLE IF NOT EXISTS users (
   exclude TEXT NOT NULL DEFAULT '[]',
   embedding BLOB,
   active INTEGER NOT NULL DEFAULT 1,
+  frequency TEXT NOT NULL DEFAULT 'apenas',
+  notify_hour INTEGER,
   matched_until TEXT NOT NULL,
   last_template_at TEXT,
   last_notified_at TEXT,
@@ -158,6 +163,8 @@ const ADDED_COLUMNS: Array<[table: string, column: string, type: string]> = [
   ["users", "first_job", "INTEGER"],
   ["users", "job_kinds", "TEXT NOT NULL DEFAULT '[]'"],
   ["users", "last_notified_at", "TEXT"],
+  ["users", "frequency", "TEXT NOT NULL DEFAULT 'apenas'"],
+  ["users", "notify_hour", "INTEGER"],
   ["deliveries", "applied", "INTEGER"],
   ["deliveries", "token", "TEXT"],
   ["deliveries", "clicks", "INTEGER NOT NULL DEFAULT 0"],
@@ -200,6 +207,8 @@ export function rowToUser(r: Row): User {
     min_salary: (r.min_salary as number | null) ?? null,
     exclude: JSON.parse(r.exclude as string),
     active: r.active === 1,
+    frequency: (r.frequency as Frequency | null) ?? "apenas",
+    notify_hour: (r.notify_hour as number | null) ?? null,
     matched_until: r.matched_until as string,
     last_template_at: (r.last_template_at as string | null) ?? null,
     last_notified_at: (r.last_notified_at as string | null) ?? null,
