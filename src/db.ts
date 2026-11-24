@@ -43,6 +43,8 @@ export type User = {
   frequency: Frequency;
   notify_hour: number | null;
   matched_until: string;
+  /** Cuándo se buscó a pedido por última vez (al guardar el perfil o con buscar_avisos). */
+  searched_at: string | null;
   last_template_at: string | null;
   last_notified_at: string | null;
 };
@@ -92,6 +94,7 @@ CREATE TABLE IF NOT EXISTS users (
   frequency TEXT NOT NULL DEFAULT 'apenas',
   notify_hour INTEGER,
   matched_until TEXT NOT NULL,
+  searched_at TEXT,
   last_template_at TEXT,
   last_notified_at TEXT,
   created_at TEXT NOT NULL,
@@ -165,6 +168,7 @@ const ADDED_COLUMNS: Array<[table: string, column: string, type: string]> = [
   ["users", "last_notified_at", "TEXT"],
   ["users", "frequency", "TEXT NOT NULL DEFAULT 'apenas'"],
   ["users", "notify_hour", "INTEGER"],
+  ["users", "searched_at", "TEXT"],
   ["deliveries", "applied", "INTEGER"],
   ["deliveries", "token", "TEXT"],
   ["deliveries", "clicks", "INTEGER NOT NULL DEFAULT 0"],
@@ -210,6 +214,7 @@ export function rowToUser(r: Row): User {
     frequency: (r.frequency as Frequency | null) ?? "apenas",
     notify_hour: (r.notify_hour as number | null) ?? null,
     matched_until: r.matched_until as string,
+    searched_at: (r.searched_at as string | null) ?? null,
     last_template_at: (r.last_template_at as string | null) ?? null,
     last_notified_at: (r.last_notified_at as string | null) ?? null,
   };

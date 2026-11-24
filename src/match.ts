@@ -3,7 +3,7 @@ import { config } from "./config.ts";
 import { fromBlob, now, rowToUser, type Job, type User } from "./db.ts";
 import { dot } from "./embed.ts";
 import type { Judge, PastFeedback } from "./llm.ts";
-import { jobKind, normalize, regionMatches } from "./text.ts";
+import { acceptedModalities, jobKind, normalize, regionMatches } from "./text.ts";
 
 const KIND_WORDS = { practica: "práctica profesional", part_time: "part-time, medio tiempo", full_time: "tiempo completo" };
 
@@ -32,7 +32,7 @@ export function passesFilters(
   if (user.regions.length && job.region && job.modality !== "remoto" && !regionMatches(user.regions, job.region)) {
     return false;
   }
-  if (user.modalities.length && job.modality && !user.modalities.includes(job.modality)) return false;
+  if (user.modalities.length && job.modality && !acceptedModalities(user.modalities).includes(job.modality)) return false;
   if (user.min_salary && job.salary && job.salary < user.min_salary) return false;
   const title = ` ${normalize(job.title)} `;
   if (user.exclude.some((x) => normalize(x) && title.includes(` ${normalize(x)} `))) return false;

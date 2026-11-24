@@ -1,11 +1,9 @@
 # buscar_avisos
-description: Busca avisos de trabajo vigentes para la persona, según lo que tiene guardado.
-when_to_use: La persona pide ver avisos o pregunta si hay algo. Usa consulta solo si pide algo distinto de lo guardado.
+description: Busca avisos vigentes para la persona con su perfil guardado, la misma búsqueda que corre al guardarlo. Si ya se buscó y desde entonces no llegó nada nuevo para su perfil, responde sin_novedades.
+when_to_use: La persona pide ver avisos o pregunta si hay algo. Si quiere algo distinto de lo que tiene guardado, cambia primero su perfil con guardar_preferencias, que ya trae los avisos.
 parameters:
   type: object
-  properties:
-    consulta: { type: string, description: "Qué buscar, si es distinto de sus preferencias guardadas." }
-    region: { type: string, description: "Región, provincia, estado o departamento, solo para esta búsqueda." }
+  properties: {}
 access: public
 request:
   method: POST
@@ -14,11 +12,10 @@ request:
   timeout: 30
   body:
     phone: "$contact.phone_number"
-    consulta:
-    region:
 respond:
   data:
     avisos: "$.avisos"
+    sin_novedades: "$.sin_novedades"
   message:
-    when_empty: No hay avisos nuevos que calcen por ahora.
+    when_empty: "No hay avisos para mostrarle. Si sin_novedades es true, ya se buscó y desde entonces no han llegado avisos nuevos para su perfil."
     default: "{{count}} avisos para mostrarle."

@@ -197,6 +197,9 @@ test("passesFilters solo descarta por lo que el aviso dice", () => {
   assert.equal(passesFilters(user, { ...job, salary: 600000 }), false);
   assert.equal(passesFilters(user, { ...job, title: "Ejecutivo Call Center" }), false);
   assert.equal(passesFilters({ ...user, modalities: ["remoto"] }, { ...job, modality: "presencial" }), false);
+  // Presencial incluye híbrido; solo remoto no.
+  assert.equal(passesFilters({ ...user, modalities: ["presencial", "remoto"] }, { ...job, modality: "hibrido" }), true);
+  assert.equal(passesFilters({ ...user, modalities: ["remoto"] }, { ...job, modality: "hibrido" }), false);
   // Tipo de trabajo: quien busca práctica no recibe empleos de jornada completa, y al revés.
   const intern = { ...user, job_kinds: ["practica"] as JobKind[] };
   assert.equal(passesFilters(intern, { ...job, job_type: "Full-time" }), false);
@@ -379,6 +382,41 @@ test("perfil: primer trabajo, estudios y tipo de trabajo se guardan y filtran", 
   assert.equal(wider.preferencias.estudios, "Técnico en administración, último año");
   assert.deepEqual(wider.avisos.map((a) => a.id), ["f1"]);
   await assert.rejects(tools.guardar_preferencias({ phone, tipos: ["freelance"] }));
+});
+
+test("buscar avisos es la búsqueda del perfil, y sin avisos nuevos desde la última no se repite", async () => {
+  const db = openDb(":memory:");
+  await addJob(db, { id: "a", title: "Contador general" });
+  await addJob(db, { id: "b", title: "Técnicos en Enfermería UPC" });
+  let judged: string[] = [];
+  const tools = createTools(db, fakeEmbed, async (u, _p, jobs) => {
+    judged.push(...jobs.map((j) => j.id));
+    return jobs.map((j) => ({ ok: j.title.includes("Contador"), reason: "" }));
+  });
+  const phone = "+56933334444";
+  const saved = await tools.guardar_preferencias({ phone, resumen: "busco de contador" });
+  assert.deepEqual(saved.avisos.map((a) => a.id), ["a"]);
+
+  // Guardar el perfil ya buscó y no llegó nada desde entonces: se dice así, sin buscar ni evaluar de nuevo.
+  judged = [];
+  assert.deepEqual(await tools.buscar_avisos({ phone }), { avisos: [], sin_novedades: true });
+  assert.deepEqual(judged, []);
+
+  // Llegan avisos nuevos: se busca con el perfil y el modelo deja solo lo que le sirve. Una consulta propia ya no
+  // existe y se ignora: con ella, a una psicóloga que buscó "psicóloga clínica" le llegó un técnico en enfermería.
+  await new Promise((r) => setTimeout(r, 5));
+  await addJob(db, { id: "c", title: "Contador tributario" });
+  await addJob(db, { id: "d", title: "Enfermera clínica" });
+  const found = await tools.buscar_avisos({ phone, consulta: "enfermera", region: "Biobío" });
+  assert.deepEqual(found.avisos.map((a) => a.id), ["c"]);
+  assert.equal(found.sin_novedades, false);
+  assert.deepEqual(judged.sort(), ["c", "d"]);
+  assert.equal((await tools.buscar_avisos({ phone })).sin_novedades, true);
+
+  // Lo que el match dejó listo y todavía no se mandó también cuenta como novedad.
+  db.prepare("UPDATE deliveries SET status = 'pending' WHERE phone = ? AND job_id = 'c'").run(phone);
+  const pending = await tools.buscar_avisos({ phone });
+  assert.deepEqual(pending.avisos.map((a) => a.id), ["c"]);
 });
 
 test("duplicados: el mismo aviso en dos portales o republicado se guarda una vez como original", async () => {

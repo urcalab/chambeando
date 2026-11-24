@@ -179,6 +179,11 @@ export function modalityOf(text: string | null | undefined): Modality | null {
   return null;
 }
 
+/** Las modalidades que le sirven a la persona: quien acepta ir a la oficina todos los días también acepta ir algunos. */
+export function acceptedModalities(modalities: Modality[]): Modality[] {
+  return modalities.includes("presencial") && !modalities.includes("hibrido") ? [...modalities, "hibrido"] : modalities;
+}
+
 /**
  * Cada cuánto quiere los avisos automáticos: apenas aparezcan (con el mínimo entre mensajes), una vez al día o una
  * vez a la semana (los lunes), desde su hora.

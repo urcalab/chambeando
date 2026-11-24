@@ -1,6 +1,6 @@
 import { config } from "./config.ts";
 import type { Job, User } from "./db.ts";
-import { COUNTRIES } from "./text.ts";
+import { COUNTRIES, acceptedModalities } from "./text.ts";
 
 export type Verdict = { ok: boolean; reason: string };
 export type PastFeedback = { title: string; useful: boolean; feedback: string | null };
@@ -17,7 +17,7 @@ export function buildPrompt(user: User, past: PastFeedback[], jobs: Job[]): stri
     user.job_kinds.length ? `Tipo de trabajo: ${user.job_kinds.join(", ")}` : "",
     user.roles.length ? `Cargos: ${user.roles.join(", ")}` : "",
     user.regions.length ? `Regiones: ${user.regions.join(", ")}` : "Regiones: cualquiera",
-    user.modalities.length ? `Modalidad: ${user.modalities.join(", ")}` : "",
+    user.modalities.length ? `Modalidad: ${acceptedModalities(user.modalities).join(", ")}` : "",
     user.min_salary ? `Sueldo mensual mínimo, en moneda local: ${user.min_salary}` : "",
     user.exclude.length ? `No quiere: ${user.exclude.join(", ")}` : "",
   ].filter(Boolean);

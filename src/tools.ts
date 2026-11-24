@@ -78,17 +78,18 @@ export type ToolHooks = { profileSaved?: (old: User | null, user: User) => void 
 
 export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | null = null, hooks: ToolHooks = {}) {
   /**
-   * Busca, marca como enviados los resultados y los devuelve para que el agente los muestre.
-   * Con `review`, el modelo descarta primero los que no calzan con el perfil; si el modelo
-   * falla, se entregan los más parecidos sin revisar antes que dejar a la persona sin respuesta.
+   * La búsqueda con el perfil: marca como enviados los resultados y los devuelve para que el agente los muestre.
+   * El modelo descarta primero los que no calzan con el perfil. Si falla, se entregan los más parecidos sin revisar
+   * antes que dejar a la persona sin respuesta.
    */
-  async function searchAndMark(user: User, vector: Float32Array, review: boolean): Promise<ReturnType<typeof present>[]> {
+  async function searchAndMark(user: User, vector: Float32Array): Promise<ReturnType<typeof present>[]> {
+    db.prepare("UPDATE users SET searched_at = ? WHERE phone = ?").run(now(), user.phone);
     const found = rank(db, user, vector, {
-      limit: review && judge ? config.candidatesPerUser : config.maxJobsPerMessage,
-      skipStatuses: review ? ["sent", "rejected"] : ["sent"],
+      limit: judge ? config.candidatesPerUser : config.maxJobsPerMessage,
+      skipStatuses: ["sent", "rejected"],
     });
     let keep = found.slice(0, config.maxJobsPerMessage);
-    if (review && judge && found.length) {
+    if (judge && found.length) {
       try {
         const verdicts = await judge(user, pastFeedback(db, user.phone), found.map((f) => f.job));
         const reject = db.prepare(
@@ -179,7 +180,7 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
           primer_trabajo: user.first_job, tipos: user.job_kinds, cargos: user.roles, regiones: user.regions,
           modalidades: user.modalities, sueldo_minimo: user.min_salary, excluir: user.exclude,
         },
-        avisos: await searchAndMark(user, vector!, true),
+        avisos: await searchAndMark(user, vector!),
       };
     },
 
@@ -200,18 +201,23 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
       };
     },
 
-    /** Búsqueda a pedido entre los avisos guardados; `consulta` y `region` son opcionales. */
+    /**
+     * La misma búsqueda que corre al guardar el perfil, a pedido. No hay búsquedas con otra consulta ni otra región:
+     * a una psicóloga que buscó "psicóloga clínica" le llegaban técnicos en enfermería por la palabra "clínica". Para
+     * buscar otra cosa, se cambia el perfil. Si desde la última búsqueda no llegó ningún aviso que pase sus filtros ni
+     * hay pendientes, no se repite: `sin_novedades` le dice al agente que se lo cuente así.
+     */
     async buscar_avisos(input: unknown) {
-      const p = z
-        .object({ phone: Phone, consulta: z.string().trim().max(300).optional(), region: z.string().optional() })
-        .parse(input);
+      const p = z.object({ phone: Phone }).parse(input);
       const user = requireUser(db, p.phone);
-      const region = p.region ? regionOf(user.country, p.region) : null;
-      if (p.region && !region) throw new ToolError(422, `No reconozco "${p.region}" como región de ${COUNTRIES[user.country]}.`);
-      const vector = p.consulta ? (await embed([p.consulta], "query"))[0]! : userVector(db, p.phone);
-      const scoped = region ? { ...user, regions: [region] } : user;
-      // Una consulta propia puede salirse del perfil a propósito, así que no se revisa contra él.
-      return { avisos: await searchAndMark(scoped, vector, !p.consulta) };
+      const vector = userVector(db, p.phone);
+      const hasPending = db.prepare("SELECT 1 FROM deliveries WHERE phone = ? AND status = 'pending' LIMIT 1").get(p.phone);
+      const fresh =
+        !user.searched_at ||
+        hasPending ||
+        rank(db, user, vector, { since: user.searched_at, limit: 1, skipStatuses: ["sent", "rejected"] }).length > 0;
+      if (!fresh) return { avisos: [], sin_novedades: true };
+      return { avisos: await searchAndMark(user, vector), sin_novedades: false };
     },
 
     /** Los avisos que el match dejó listos y todavía no se le mostraron. */

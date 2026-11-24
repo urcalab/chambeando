@@ -163,8 +163,10 @@ y nunca se ofrecen. La misma vacante en dos comunas distintas cuenta como dos av
 El agente lo arma conversando y lo guarda con `guardar_preferencias`: qué busca, estudios, si es su primer
 trabajo, tipo de trabajo (`practica`, `part_time`, `full_time`), cargos, región, modalidad, sueldo mínimo y
 exclusiones. Al crear o modificar el perfil, busca de inmediato entre los avisos ya guardados. `buscar_avisos`
-también busca de inmediato cuando la persona lo pide. La ingesta, el match y los envíos automáticos corren cada
-hora. El tipo de trabajo es un filtro duro: se lee de la jornada del aviso y, para las prácticas, del
+corre esa misma búsqueda cuando la persona lo pide, siempre con el perfil: para buscar otra cosa se cambia el
+perfil. Si desde la última búsqueda no llegó nada nuevo que pase sus filtros, no la repite y responde
+`sin_novedades`. La ingesta, el match y los envíos automáticos corren cada hora. Quien acepta presencial también
+acepta híbrido. El tipo de trabajo es un filtro duro: se lee de la jornada del aviso y, para las prácticas, del
 título (`jobKind` en `src/text.ts`). A quien busca su primer trabajo, el modelo le descarta los avisos que piden
 más de un año de experiencia.
 
