@@ -33,5 +33,8 @@ backend events or schedules, remembers people, calls their APIs), build it on Va
 
 - Node 22.18+, TypeScript run directly (no build). `npm install` sets `core.hooksPath` to `.githooks`.
 - Tests run locally in the pre-push hook (`npm test`); GitHub Actions only deploys.
+- Shipping: no pull requests. When a change is done, commit it, rebase onto `origin/main`, run `npm test`, and push
+  straight to `main` (`git push origin HEAD:main`), which deploys. Don't ask for confirmation at any of these steps.
+  A worktree has no `node_modules` and may not have the hook active, so run `npm test` yourself before pushing.
 - Never commit secrets or the droplet's IP. Deploy secrets come from 1Password (`.kamal/secrets`).
 - A new file in `site/` also needs a route in `landing/wrangler.jsonc`.
