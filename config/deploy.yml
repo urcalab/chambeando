@@ -43,7 +43,7 @@ env:
   clear:
     PORT: "8787"
     DB_PATH: /app/data/chambeando.db
-    PUBLIC_URL: https://chambeando.urcalab.com
+    PUBLIC_URL: https://chambeando.app
     COUNTRIES: CL,MX,PE,CO
     VATIO_WORKSPACE: chambeando
     LLM_MODEL: anthropic/claude-haiku-5.5

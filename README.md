@@ -176,8 +176,9 @@ ventana de 24 horas de WhatsApp sale como máximo una plantilla al día, sea cua
 
 ## Feedback de las recomendaciones
 
-Cada link que recibe una persona pasa por `/r/<token>` antes de llegar al portal, así que se cuenta quién abrió
-qué. El token sale de un HMAC del teléfono y el aviso, sin datos de la persona, y usa solo minúsculas sin
+Cada link que recibe una persona pasa por `https://chambeando.app/r/<token>` (`PUBLIC_URL`) antes de llegar al
+portal, así que se cuenta quién abrió qué. En `chambeando.app` el worker de la landing le pasa esos pedidos al
+backend sin seguir la redirección; los links ya enviados con `chambeando.urcalab.com` siguen funcionando. El token sale de un HMAC del teléfono y el aviso, sin datos de la persona, y usa solo minúsculas sin
 caracteres ambiguos para que el agente lo copie bien. El agente además pregunta si el aviso sirvió y si la
 persona postuló. `GET /stats?days=7` (con la clave del backend) muestra el embudo completo por portal y los
 últimos motivos de "no me sirve".
@@ -218,7 +219,8 @@ Hugging Face la primera vez y usa unos 550 MB de RAM.
 
 La landing (`site/index.html`) la sirve un Worker de Cloudflare en `chambeando.app` (el dominio entero) y en la
 raíz de `chambeando.urcalab.com` (`landing/wrangler.jsonc`, desplegado por `.github/workflows/deploy-landing.yml`), así que las visitas a la
-página no llegan al droplet. El resto de las rutas (`/tools/*`, `/r/*`, `/health`, `/stats`) van al backend.
+página no llegan al droplet. El resto de las rutas (`/tools/*`, `/r/*`, `/health`, `/stats`) van al backend; en
+`chambeando.app`, `/r/*` lo reenvía el worker.
 
 Corre en un droplet compartido, detrás de kamal-proxy y Cloudflare, en https://chambeando.urcalab.com.
 `.github/workflows/deploy.yml` solo despliega, con Kamal, en cada push a main que toque el backend. Los tests corren

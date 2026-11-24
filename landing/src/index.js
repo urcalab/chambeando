@@ -33,10 +33,29 @@ export function personalize(html, country) {
   return out;
 }
 
+// Los links de los avisos (/r/<token>) los atiende el backend: cuenta el clic y redirige al portal. En chambeando.app
+// el worker responde todo el dominio, así que se los pasa sin seguir la redirección (el navegador va directo al
+// portal). En chambeando.urcalab.com el worker no tiene la ruta /r/ y el pedido llega al backend por su cuenta.
+export const BACKEND = "https://chambeando.urcalab.com";
+
+/** El pedido de un link de aviso, para el backend: solo las cabeceras que sirven y la IP de quien hizo clic. */
+export function toBackend(request) {
+  const url = new URL(request.url);
+  const headers = new Headers();
+  for (const name of ["user-agent", "accept", "accept-language"]) {
+    const value = request.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  const ip = request.headers.get("cf-connecting-ip");
+  if (ip) headers.set("x-forwarded-for", ip);
+  return new Request(BACKEND + url.pathname + url.search, { method: request.method, headers, redirect: "manual" });
+}
+
 export default {
   async fetch(request, env) {
-    const res = await env.ASSETS.fetch(request);
     const { pathname } = new URL(request.url);
+    if (pathname.startsWith("/r/")) return fetch(toBackend(request));
+    const res = await env.ASSETS.fetch(request);
     const type = res.headers.get("content-type") ?? "";
     if (pathname !== "/" || !res.ok || !type.includes("text/html")) return res;
     const country = request.cf?.country ?? "";
