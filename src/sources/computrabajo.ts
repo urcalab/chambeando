@@ -24,6 +24,10 @@ export const COMPUTRABAJO_SITES: Record<string, ComputrabajoSite> = Object.fromE
   ]),
 );
 
+// Pausas generosas: Computrabajo es el portal más sensible a la carga (bloqueó al servidor con 403).
+const DETAIL_PAUSE_MS = 1500;
+const PAGE_PAUSE_MS = 3000;
+
 export type Listed = { id: string; title: string; path: string };
 
 /** Los avisos de una página de listado: id, título y ruta al detalle. */
@@ -146,10 +150,10 @@ export function computrabajo(siteKey: string): Source {
             jobs.push(job);
             fresh++;
           } else invalid++;
-          await sleep(400);
+          await sleep(DETAIL_PAUSE_MS);
         }
         if (fresh === 0 || cold) break;
-        await sleep(800);
+        await sleep(PAGE_PAUSE_MS);
       }
     }
     return { jobs, pages, invalid };

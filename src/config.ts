@@ -30,7 +30,9 @@ export const config = {
   /** Sitios Computrabajo a recorrer ("computrabajo-mx,computrabajo-co"); sin definir, todos los países. */
   computrabajoSites: env.COMPUTRABAJO_SITES?.split(",").map((s) => s.trim()).filter(Boolean) ?? null,
   /** Páginas de 20 avisos por región en cada corrida. */
-  computrabajoMaxPages: int(env.COMPUTRABAJO_MAX_PAGES, 3),
+  computrabajoMaxPages: int(env.COMPUTRABAJO_MAX_PAGES, 1),
+  /** Horas que se deja descansar una fuente que respondió 403 o 429 antes de volver a intentarlo. */
+  blockedSourceBackoffHours: int(env.BLOCKED_SOURCE_BACKOFF_HOURS, 24),
   trabajandoMaxPages: int(env.TRABAJANDO_MAX_PAGES, 20),
   /** Avisos que se evalúan con el modelo por usuario en cada corrida. */
   candidatesPerUser: 8,

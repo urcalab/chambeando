@@ -11,6 +11,7 @@ import { maskPhone, phoneId } from "../src/admin.ts";
 import { createApp } from "../src/server.ts";
 import type { AddressInfo } from "node:net";
 import { dedupeKey, ingest, localityOf, sameLocality } from "../src/ingest.ts";
+import { restingSources } from "../src/cycle.ts";
 import type { Embedder } from "../src/embed.ts";
 import { parseVerdicts, type Judge } from "../src/llm.ts";
 import { matchAll, passesFilters } from "../src/match.ts";
@@ -579,6 +580,23 @@ test("al cambiar el perfil se olvida lo aprobado con el anterior, y lo pendiente
   assert.equal(r.sent, 0);
   assert.deepEqual(sent, []);
   assert.equal((db.prepare("SELECT status FROM deliveries WHERE job_id = 'stgo'").get() as any).status, "rejected");
+});
+
+test("una fuente que respondió 403 descansa 24 horas antes de volver a intentarse", () => {
+  const db = openDb(":memory:");
+  const run = (at: string, ingested: object) =>
+    db.prepare("INSERT INTO ingest_runs (started_at, finished_at, result) VALUES (?, ?, ?)").run(at, at, JSON.stringify({ ingested }));
+  run("2026-11-23T10:00:00Z", { "computrabajo-cl": { error: "https://cl.computrabajo.com/x respondió 403" }, laborum: { added: 5 } });
+  run("2026-11-23T11:00:00Z", { "computrabajo-cl": { skipped: "bloqueada" }, laborum: { added: 2 } });
+  const at = (iso: string) => Date.parse(iso);
+  assert.deepEqual([...restingSources(db, at("2026-11-23T20:00:00Z")).keys()], ["computrabajo-cl"]);
+  assert.deepEqual([...restingSources(db, at("2026-11-24T10:30:00Z")).keys()], []);
+  // Si en el reintento ya responde, deja de descansar.
+  run("2026-11-24T11:00:00Z", { "computrabajo-cl": { added: 20 } });
+  assert.deepEqual([...restingSources(db, at("2026-11-24T12:00:00Z")).keys()], []);
+  // Un error que no es bloqueo (por ejemplo, un cambio de HTML) no hace descansar a la fuente.
+  run("2026-11-24T13:00:00Z", { "computrabajo-cl": { error: "https://cl.computrabajo.com/x no trae avisos" } });
+  assert.deepEqual([...restingSources(db, at("2026-11-24T14:00:00Z")).keys()], []);
 });
 
 test("si el modelo falla, los avisos se reintentan en la próxima corrida", async () => {
