@@ -34,8 +34,6 @@ export const config = {
   computrabajoMaxPages: int(env.COMPUTRABAJO_MAX_PAGES, 1),
   /** Proxy HTTP(S) de salida exclusivo para Computrabajo. Vacío: conexión directa. */
   computrabajoProxyUrl: env.COMPUTRABAJO_PROXY_URL || undefined,
-  /** Horas que se deja descansar una fuente que respondió 403 o 429 antes de volver a intentarlo. */
-  blockedSourceBackoffHours: int(env.BLOCKED_SOURCE_BACKOFF_HOURS, 24),
   trabajandoMaxPages: int(env.TRABAJANDO_MAX_PAGES, 20),
   /** Avisos que se evalúan con el modelo por usuario en cada corrida. */
   candidatesPerUser: 8,

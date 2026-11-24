@@ -24,7 +24,7 @@ function rotateProxy(proxyUrl: string): void {
   agent?.close().catch(() => {});
 }
 
-/** Un portal respondió con un código de error. El mensaje ("… respondió 403") es lo que mira el descanso de fuentes. */
+/** Un portal respondió con un código de error ("… respondió 403"). */
 export class HttpError extends Error {
   status: number;
   constructor(url: string, status: number) {

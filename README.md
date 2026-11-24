@@ -137,7 +137,7 @@ se trae solo su primera página (unos 20 avisos).
 Desde el servidor de producción Computrabajo responde 403, así que sus pedidos salen por un proxy
 (`COMPUTRABAJO_PROXY_URL`). El proxy cambia de IP y algunas están bloqueadas: un 403, 429, error 5xx o timeout se
 reintenta hasta 4 veces por un túnel nuevo. Una región que sigue fallando no detiene a las demás. Solo si fallan
-todas, la fuente queda con error, y si fue un 403 o 429, descansa 24 horas (`BLOCKED_SOURCE_BACKOFF_HOURS`).
+todas, la fuente queda con error en esa corrida, y la siguiente la vuelve a intentar.
 
 `node src/cli.ts counts` muestra cuántos avisos declara cada portal; de ahí sale la tabla de la landing.
 

@@ -139,7 +139,7 @@ export function toJob(siteKey: string, regionName: string, listed: Listed, detai
 
 /**
  * Recorre `regions` (todas, si no se dicen). Una región que falla, aun después de los reintentos del proxy, no detiene
- * a las demás: solo si fallan todas la fuente queda con error (y si fue un 403 o 429, descansa).
+ * a las demás: solo si fallan todas la fuente queda con error, y la próxima corrida la vuelve a intentar.
  */
 export function computrabajo(siteKey: string, regions?: Region[], get = fetchText): Source {
   const site = COMPUTRABAJO_SITES[siteKey];

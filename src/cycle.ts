@@ -13,29 +13,6 @@ import { JOBINT_SITES } from "./sources/jobint.ts";
 import { trabajando } from "./sources/trabajando.ts";
 import { isEnabled } from "./text.ts";
 
-/**
- * Fuentes que respondieron 403 o 429 en su último intento y todavía están en su tiempo de descanso. No se insiste:
- * se vuelve a probar una vez pasado BLOCKED_SOURCE_BACKOFF_HOURS, con el mismo ritmo de siempre.
- */
-export function restingSources(db: DatabaseSync, at = Date.now()): Map<string, string> {
-  const runs = db.prepare("SELECT started_at, result FROM ingest_runs WHERE result IS NOT NULL ORDER BY id DESC LIMIT 200").all() as Array<{ started_at: string; result: string }>;
-  const lastTry = new Map<string, { at: number; error?: string }>();
-  for (const run of runs) {
-    const ingested = (JSON.parse(run.result).ingested ?? {}) as Record<string, { error?: string; skipped?: string }>;
-    for (const [key, r] of Object.entries(ingested)) {
-      if (r.skipped || lastTry.has(key)) continue;
-      lastTry.set(key, { at: Date.parse(run.started_at), error: r.error });
-    }
-  }
-  const out = new Map<string, string>();
-  for (const [key, t] of lastTry) {
-    if (!t.error || !/respondió (403|429)\b/.test(t.error)) continue;
-    const until = t.at + config.blockedSourceBackoffHours * 3_600_000;
-    if (at < until) out.set(key, new Date(until).toISOString());
-  }
-  return out;
-}
-
 /** Las regiones guardadas de las personas activas de un país, menos `except`. */
 function activeUsers(db: DatabaseSync, country: string, except?: string): Array<Pick<User, "regions">> {
   const rows = db.prepare("SELECT regions FROM users WHERE active = 1 AND country = ? AND phone IS NOT ?").all(country, except ?? null);
@@ -89,16 +66,13 @@ function exclusive<T>(fn: () => Promise<T>): Promise<T> {
 
 /**
  * Al crear o cambiar un perfil, trae las regiones nuevas de Computrabajo sin esperar a la próxima corrida, que es la
- * que después cruza y manda lo que llegue. Si la fuente está descansando por un bloqueo, no se pide.
+ * que después cruza y manda lo que llegue.
  */
 export function ingestNewRegions(db: DatabaseSync, embed: Embedder, old: User | null, user: User): Promise<IngestReport | null> {
   const wanted = newRegions(db, old, user);
   if (!wanted) return Promise.resolve(null);
-  return exclusive(async () => {
-    if (restingSources(db).has(wanted.site)) return null;
-    const source = computrabajo(wanted.site, wanted.regions);
-    return ingest(db, embed, { [wanted.site]: { source, maxPages: config.computrabajoMaxPages } });
-  });
+  const source = computrabajo(wanted.site, wanted.regions);
+  return exclusive(() => ingest(db, embed, { [wanted.site]: { source, maxPages: config.computrabajoMaxPages } }));
 }
 
 let running = false;
@@ -117,10 +91,7 @@ export async function runCycle(db: DatabaseSync, embed: Embedder) {
 async function cycle(db: DatabaseSync, embed: Embedder) {
   const run = db.prepare("INSERT INTO ingest_runs (started_at) VALUES (?)").run(now()).lastInsertRowid;
   try {
-    const resting = restingSources(db);
-    const active = Object.fromEntries(Object.entries(sources(db)).filter(([key]) => !resting.has(key)));
-    const ingested: Record<string, unknown> = await ingest(db, embed, active);
-    for (const [key, until] of resting) ingested[key] = { added: 0, duplicates: 0, pages: 0, invalid: 0, skipped: `bloqueada (403/429); se reintenta después de ${until}` };
+    const ingested = await ingest(db, embed, sources(db));
     const matched = await matchAll(db, config.llm.apiKey ? llmJudge : null);
     const notified = config.vatio.serverKey
       ? await notifyAll(db, vatioSender)
