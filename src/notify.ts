@@ -35,12 +35,13 @@ export type SendResult = "sent" | "template" | "outside_window" | "failed";
 export type Sender = (msg: {
   to: string;
   text: string;
-  brief: string;
   key: string;
   template?: { name: string; language: string; params: string[] };
 }) => Promise<{ status: number; mode?: string; code?: string; message?: string }>;
 
-export const vatioSender: Sender = async ({ to, text, brief, key, template }) => {
+// POST /messages manda nuestro texto tal cual (con los links exactos) o, con la ventana de 24 h cerrada, la plantilla.
+// Vatio ya no acepta `brief` aquí; el agente ve el mensaje en la conversación y responde con ese contexto.
+export const vatioSender: Sender = async ({ to, text, key, template }) => {
   const res = await fetch(`${config.vatio.baseUrl}/api/server/v1/${config.vatio.workspace}/messages`, {
     method: "POST",
     headers: {
@@ -48,7 +49,7 @@ export const vatioSender: Sender = async ({ to, text, brief, key, template }) =>
       authorization: `Bearer ${config.vatio.serverKey}`,
       "idempotency-key": key,
     },
-    body: JSON.stringify({ to, text, brief, ...(template ? { template } : {}) }),
+    body: JSON.stringify({ to, text, ...(template ? { template } : {}) }),
     signal: AbortSignal.timeout(30_000),
   });
   const body = (await res.json().catch(() => ({}))) as any;
@@ -110,12 +111,9 @@ export function markSent(db: DatabaseSync, phone: string, jobIds: string[]): voi
 
 async function sendTo(db: DatabaseSync, user: User, jobs: Job[], send: Sender): Promise<SendResult> {
   const text = formatMessage(jobs, user.phone);
-  const brief = `Avisos de trabajo nuevos que calzan con lo que busca esta persona:\n${jobs
-    .map((j) => `- ${j.id}: ${j.title} (${j.company ?? "empresa confidencial"}, ${j.location ?? "?"}) ${jobLink(user.phone, j)}`)
-    .join("\n")}`.slice(0, 2000);
   const key = createHash("sha256").update(`${user.phone}|${jobs.map((j) => j.id).join(",")}`).digest("hex").slice(0, 32);
 
-  const first = await send({ to: user.phone, text, brief, key });
+  const first = await send({ to: user.phone, text, key });
   if (first.status === 200 || first.status === 202) {
     markSent(db, user.phone, jobs.map((j) => j.id));
     return "sent";
@@ -133,7 +131,6 @@ async function sendTo(db: DatabaseSync, user: User, jobs: Job[], send: Sender): 
   const second = await send({
     to: user.phone,
     text,
-    brief,
     key: `${key}-t`,
     template: {
       name: config.vatio.template,
