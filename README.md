@@ -51,7 +51,7 @@ flowchart LR
 
 | Pieza | Dónde | Qué hace |
 |---|---|---|
-| Conectores | `src/sources/` | Jobint (Laborum, Bumeran), Computrabajo y Trabajando |
+| Conectores | `src/sources/` | Jobint (Laborum, Bumeran), Computrabajo, Trabajando y Get on Board |
 | Ingesta | `src/ingest.ts` | Guarda los avisos nuevos, deduplica y calcula embeddings |
 | Embeddings | `src/embed.ts` | `multilingual-e5-small` en el mismo proceso, sin costo por llamada |
 | Match | `src/match.ts`, `src/llm.ts` | Filtros, similitud y juez (Claude Haiku vía OpenRouter) |
@@ -110,10 +110,10 @@ El servicio está abierto en **Chile, México, Perú y Colombia** (variable `COU
 
 | País | Portales |
 |---|---|
-| Chile | Computrabajo, Laborum, Trabajando |
-| México | Computrabajo, Bumeran |
-| Perú | Computrabajo, Bumeran |
-| Colombia | Computrabajo |
+| Chile | Computrabajo, Laborum, Trabajando, Get on Board |
+| México | Computrabajo, Bumeran, Get on Board |
+| Perú | Computrabajo, Bumeran, Get on Board |
+| Colombia | Computrabajo, Get on Board |
 
 Los conectores ya cubren otros 13 países de Latinoamérica (Jobint en 7 y Computrabajo en 17); se abren
 agregando su código a `COUNTRIES`. Mientras no estén ahí, no se traen sus avisos ni se aceptan sus números.
@@ -138,6 +138,15 @@ Desde el servidor de producción Computrabajo responde 403, así que sus pedidos
 (`COMPUTRABAJO_PROXY_URL`). El proxy cambia de IP y algunas están bloqueadas: un 403, 429, error 5xx o timeout se
 reintenta hasta 4 veces por un túnel nuevo. Una región que sigue fallando no detiene a las demás. Solo si fallan
 todas, la fuente queda con error en esa corrida, y la siguiente la vuelve a intentar.
+
+Get on Board (`src/sources/getonboard.ts`) trae avisos de tecnología de su [API pública](https://getonbrd.com/api-doc.html),
+que no pide clave. El listado de cada país son unos cientos de avisos y no viene ordenado por fecha, así que se
+recorre entero en cada corrida (unas 10 consultas). Lo que deja de aparecer se cerró: queda sin embedding y no se
+ofrece más. El sueldo viene bruto en dólares: va como texto al comienzo de la descripción (y en el mensaje), no en
+`salary`, que es en moneda local y filtra el sueldo mínimo. Sus términos de uso (sección 7.1) piden mostrar "Get on
+Board" como fuente (los mensajes dicen en qué portal se publicó cada aviso), enlazar a la página del aviso, mostrar
+los datos sin cambios y refrescados al menos cada 24 horas, y no usarlos en un producto que cobre a quien busca
+trabajo, revenderlos ni entrenar modelos con ellos.
 
 `node src/cli.ts counts` muestra cuántos avisos declara cada portal; de ahí sale la tabla de la landing.
 

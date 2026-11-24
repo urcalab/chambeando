@@ -10,13 +10,22 @@ const money = (n: number) => `$${n.toLocaleString("es-419")}`;
 
 const MODALITY_LABEL: Record<string, string | null> = { presencial: null, hibrido: "híbrido", remoto: "remoto" };
 
+/** El nombre de cada portal, como se muestra. Get on Board pide aparecer como fuente de sus avisos. */
+export const PORTALS: Record<string, string> = {
+  computrabajo: "Computrabajo", laborum: "Laborum", bumeran: "Bumeran", multitrabajos: "Multitrabajos",
+  konzerta: "Konzerta", trabajando: "Trabajando", getonboard: "Get on Board",
+};
+
 export function formatJob(j: Job, link: string, n?: number, ago?: string | null): string {
   const place = [j.company, j.location, MODALITY_LABEL[j.modality ?? "presencial"]].filter(Boolean).join(" · ");
+  const portal = PORTALS[j.source];
+  // Un sueldo en otra moneda (Get on Board lo da en dólares) viene como primera línea de la descripción.
+  const salary = j.salary ? `Sueldo: ${money(j.salary)}` : (/^Sueldo bruto: [^\n]+/.exec(j.description ?? "")?.[0] ?? null);
   return [
     `${n ? `${n}. ` : ""}*${j.title}*`,
     place,
-    j.salary ? `Sueldo: ${money(j.salary)}` : null,
-    ago ? `Publicado ${ago}` : null,
+    salary,
+    ago || portal ? ["Publicado", ago, portal && `en ${portal}`].filter(Boolean).join(" ") : null,
     link,
   ]
     .filter(Boolean)

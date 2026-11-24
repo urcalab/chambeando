@@ -46,10 +46,14 @@ export function sameLocality(a: string[], b: string[]): boolean {
 export function operatorOf(sourceKey: string): string {
   if (sourceKey.startsWith("computrabajo")) return "computrabajo";
   if (sourceKey === "trabajando") return "trabajando";
+  if (sourceKey.startsWith("getonboard")) return "getonboard";
   return "jobint";
 }
 
-export type IngestReport = Record<string, { added: number; duplicates: number; pages: number; invalid: number; note?: string; error?: string }>;
+export type IngestReport = Record<
+  string,
+  { added: number; duplicates: number; pages: number; invalid: number; closed?: number; note?: string; error?: string }
+>;
 
 /** Trae los avisos nuevos de cada portal y los guarda con su embedding. Un portal caído no detiene al otro. */
 export async function ingest(
@@ -105,7 +109,22 @@ export async function ingest(
           j.job_type, j.salary, j.description, j.published_at, seenAt, prior ? null : toBlob(vector!), key, locality.join(" "), prior,
         );
       });
-      report[name] = { added: res.jobs.length - duplicates, duplicates, pages: res.pages, invalid: res.invalid, ...(res.note ? { note: res.note } : {}) };
+      // Con el listado entero de la fuente, lo suyo que ya no aparece se dejó de publicar: sin embedding no se
+      // ofrece más (como un duplicado), y lo pendiente de enviar se descarta.
+      let closed = 0;
+      if (res.listed) {
+        const live = new Set(res.listed);
+        const ours = db.prepare("SELECT id FROM jobs WHERE id LIKE ? AND embedding IS NOT NULL").all(`${name}:%`) as Array<{ id: string }>;
+        for (const { id } of ours.filter((r) => !live.has(r.id))) {
+          db.prepare("UPDATE jobs SET embedding = NULL WHERE id = ?").run(id);
+          db.prepare("DELETE FROM deliveries WHERE job_id = ? AND status = 'pending'").run(id);
+          closed++;
+        }
+      }
+      report[name] = {
+        added: res.jobs.length - duplicates, duplicates, pages: res.pages, invalid: res.invalid,
+        ...(closed ? { closed } : {}), ...(res.note ? { note: res.note } : {}),
+      };
     } catch (e) {
       report[name] = { added: 0, duplicates: 0, pages: 0, invalid: 0, error: (e as Error).message };
     }

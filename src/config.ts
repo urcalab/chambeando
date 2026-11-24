@@ -35,6 +35,8 @@ export const config = {
   /** Proxy HTTP(S) de salida exclusivo para Computrabajo. Vacío: conexión directa. */
   computrabajoProxyUrl: env.COMPUTRABAJO_PROXY_URL || undefined,
   trabajandoMaxPages: int(env.TRABAJANDO_MAX_PAGES, 20),
+  /** Páginas de 120 avisos por país en Get on Board; el listado entero de un país cabe en menos. */
+  getonboardMaxPages: int(env.GETONBOARD_MAX_PAGES, 10),
   /** Avisos que se evalúan con el modelo por usuario en cada corrida. */
   candidatesPerUser: 8,
   /** Avisos que se mandan como máximo en un mensaje. */

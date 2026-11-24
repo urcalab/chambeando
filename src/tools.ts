@@ -6,7 +6,7 @@ import type { Embedder } from "./embed.ts";
 import type { Judge } from "./llm.ts";
 import { pastFeedback, rank, userText } from "./match.ts";
 import { jobLink } from "./feedback.ts";
-import { markSent, pendingJobs } from "./notify.ts";
+import { PORTALS, markSent, pendingJobs } from "./notify.ts";
 import { COUNTRIES, ENABLED_COUNTRIES, FREQUENCIES, JOB_KINDS, publishedAgo, countryOf, countryOfPhone, normalizePhone, regionOf, type Country, type JobKind, type Modality } from "./text.ts";
 
 const SUPPORTED = `Países disponibles: ${ENABLED_COUNTRIES.map((c) => COUNTRIES[c]).join(", ")}.`;
@@ -48,7 +48,7 @@ function present(j: Job, phone: string) {
     sueldo: j.salary,
     publicado: j.published_at,
     publicado_hace: publishedAgo(j.published_at, j.country),
-    portal: j.source,
+    portal: PORTALS[j.source] ?? j.source,
     url: jobLink(phone, j),
     extracto: j.description.slice(0, 280),
   };

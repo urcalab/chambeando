@@ -18,6 +18,7 @@ import { matchAll, passesFilters } from "../src/match.ts";
 import { canMessageNow, formatMessage, notifyAll, type Sender } from "../src/notify.ts";
 import { computrabajo, parseListing, regionsFor, toJob as computrabajoJob } from "../src/sources/computrabajo.ts";
 import { HttpError, retryable, withRetries } from "../src/sources/http.ts";
+import { availableIn, getonboard, toJob as getonboardJob } from "../src/sources/getonboard.ts";
 import { parseJobintDate, toJob as jobintJob } from "../src/sources/jobint.ts";
 import { toJob as trabajandoJob } from "../src/sources/trabajando.ts";
 import type { NewJob } from "../src/sources/types.ts";
@@ -707,4 +708,87 @@ test("frecuencia de los avisos: se guarda sin tocar lo pendiente y se ve en el p
   const job = { id: "a", title: "Diseñador", company: "X", location: "Viña", modality: null, salary: null, url: "https://x", published_at: null, country: "CL" } as any;
   assert.match(formatMessage([job], phone, 4), /Tengo 4 avisos más para ti/);
   assert.doesNotMatch(formatMessage([job], phone), /más para ti/);
+});
+
+const gobPosting = (over: Record<string, unknown> = {}, id = "desarrollador-junior-magnet-santiago") => ({
+  id,
+  type: "job",
+  attributes: {
+    title: "Desarrollador Full-Stack Junior ",
+    description_headline: "Requisitos mínimos",
+    description: "<ul><li>Entre 0 y 2 años de experiencia</li></ul>",
+    functions_headline: "Propósito del cargo",
+    functions: "<p>Construir y mantener <b>features</b></p>",
+    benefits: null,
+    remote_modality: "hybrid",
+    countries: ["Chile"],
+    min_salary: 1600,
+    max_salary: 1900,
+    published_at: 1795469057,
+    company: { data: { id: 1517, type: "company", attributes: { name: "Magnet" } } },
+    modality: { data: { id: 1, type: "modality", attributes: { name: "Full time" } } },
+    seniority: { data: { id: 2, type: "seniority", attributes: { name: "Junior" } } },
+    location_cities: { data: [{ id: 1, type: "location_city", attributes: { name: "Santiago", country: "Chile" } }] },
+    ...over,
+  },
+  links: { public_url: `https://www.getonbrd.com/jobs/${id}` },
+});
+
+test("Get on Board: convierte un aviso, con el sueldo en dólares como texto", () => {
+  const job = getonboardJob("CL", gobPosting())!;
+  assert.equal(job.id, "getonboard-cl:desarrollador-junior-magnet-santiago");
+  assert.equal(job.source, "getonboard");
+  assert.equal(job.url, "https://www.getonbrd.com/jobs/desarrollador-junior-magnet-santiago");
+  assert.deepEqual([job.title, job.company, job.location, job.region, job.modality], ["Desarrollador Full-Stack Junior", "Magnet", "Santiago, Chile", "metropolitana", "hibrido"]);
+  assert.equal(jobKind(job.job_type, job.title), "full_time");
+  // El sueldo de Get on Board es bruto en dólares: no entra en `salary` (moneda local) para no filtrar mal.
+  assert.equal(job.salary, null);
+  assert.match(job.description, /^Sueldo bruto: US\$1,600 a US\$1,900 al mes\.\n\nExperiencia: Junior\.\n\nRequisitos mínimos\nEntre 0 y 2 años/);
+  assert.equal(job.published_at, new Date(1795469057 * 1000).toISOString());
+  // Remoto: sirve en cualquier región; se ofrece en todos los países que busquen.
+  const remote = gobPosting({ countries: ["Remote"], remote_modality: "remote_local", location_cities: { data: [] } }, "qa-remote");
+  assert.ok(availableIn("CO", remote));
+  assert.deepEqual(
+    (({ region, modality, location }) => ({ region, modality, location }))(getonboardJob("CO", remote)!),
+    { region: null, modality: "remoto", location: null },
+  );
+  assert.ok(!availableIn("CL", gobPosting({ countries: ["Uruguay"] })));
+  // Una ciudad que no es una región conocida no inventa región.
+  assert.equal(getonboardJob("CO", gobPosting({ countries: ["Colombia"], remote_modality: "no_remote", location_cities: { data: [{ attributes: { name: "Medellín", country: "Colombia" } }] } }))!.region, null);
+  assert.equal(getonboardJob("CO", gobPosting({ countries: ["Colombia"], location_cities: { data: [{ attributes: { name: "Bogotá", country: "Colombia" } }] } }))!.region, "bogota");
+  assert.equal(getonboardJob("CL", { id: "x", attributes: {} }), null);
+  // El mensaje dice de qué portal viene el aviso y muestra el sueldo en dólares.
+  const text = formatMessage([{ ...job, published_at: new Date().toISOString() } as any], "+56911112222");
+  assert.match(text, /Sueldo bruto: US\$1,600 a US\$1,900 al mes\./);
+  assert.match(text, /Publicado hoy en Get on Board/);
+});
+
+test("Get on Board: recorre todas las páginas y, con el listado entero, deja de ofrecer lo que se cerró", async () => {
+  const pages: Record<number, unknown> = {
+    1: { data: [gobPosting({}, "a"), gobPosting({ countries: ["Uruguay"] }, "uy")], meta: { total_pages: 2 } },
+    2: { data: [gobPosting({}, "b")], meta: { total_pages: 2 } },
+  };
+  const urls: string[] = [];
+  const get = async (url: string) => (urls.push(url), pages[Number(new URL(url).searchParams.get("page"))]);
+  const full = await getonboard("CL", get)({ maxPages: 10, isKnown: (id) => id === "getonboard-cl:a" });
+  assert.deepEqual(full.jobs.map((j) => j.id), ["getonboard-cl:b"]);
+  assert.deepEqual(full.listed, ["getonboard-cl:a", "getonboard-cl:b"]);
+  assert.match(urls[0]!, /country_code=cl&per_page=120&page=1&expand=/);
+  // Sin recorrer todo, no se sabe qué se cerró.
+  const partial = await getonboard("CL", get)({ maxPages: 1, isKnown: () => false });
+  assert.equal(partial.listed, undefined);
+
+  const db = openDb(":memory:");
+  const tools = createTools(db, fakeEmbed, null);
+  const phone = "+56966667777";
+  await tools.guardar_preferencias({ phone, resumen: "desarrollador junior" });
+  const source = (listed: string[], jobs = [] as NewJob[]) => async () => ({ jobs, pages: 1, invalid: 0, listed });
+  await ingest(db, fakeEmbed, { "getonboard-cl": { source: source(["getonboard-cl:a", "getonboard-cl:b"], [getonboardJob("CL", gobPosting({}, "a"))!, getonboardJob("CL", gobPosting({ title: "Analista de datos" }, "b"))!]), maxPages: 1 } });
+  db.prepare("INSERT INTO deliveries (phone, job_id, status, created_at) VALUES (?, 'getonboard-cl:b', 'pending', ?)").run(phone, now());
+  const report = await ingest(db, fakeEmbed, { "getonboard-cl": { source: source(["getonboard-cl:a"]), maxPages: 1 } });
+  assert.equal(report["getonboard-cl"]!.closed, 1);
+  const b = db.prepare("SELECT embedding FROM jobs WHERE id = 'getonboard-cl:b'").get() as { embedding: unknown };
+  assert.equal(b.embedding, null);
+  assert.equal((db.prepare("SELECT COUNT(*) AS n FROM deliveries WHERE job_id = 'getonboard-cl:b'").get() as { n: number }).n, 0);
+  assert.notEqual((db.prepare("SELECT embedding FROM jobs WHERE id = 'getonboard-cl:a'").get() as { embedding: unknown }).embedding, null);
 });

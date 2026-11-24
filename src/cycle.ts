@@ -7,11 +7,12 @@ import { llmJudge } from "./llm.ts";
 import { matchAll } from "./match.ts";
 import { notifyAll, vatioSender } from "./notify.ts";
 import { COMPUTRABAJO_SITES, computrabajo, regionsFor, type Region } from "./sources/computrabajo.ts";
+import { getonboard } from "./sources/getonboard.ts";
 import { jobint } from "./sources/jobint.ts";
 import type { Source } from "./sources/types.ts";
 import { JOBINT_SITES } from "./sources/jobint.ts";
 import { trabajando } from "./sources/trabajando.ts";
-import { isEnabled } from "./text.ts";
+import { ENABLED_COUNTRIES, isEnabled } from "./text.ts";
 
 /** Las regiones guardadas de las personas activas de un país, menos `except`. */
 function activeUsers(db: DatabaseSync, country: string, except?: string): Array<Pick<User, "regions">> {
@@ -39,6 +40,10 @@ export function sources(db: DatabaseSync): Record<string, { source: Source; maxP
     all[key] = { source: computrabajo(key, regionsFor(key, activeUsers(db, site.country))), maxPages: config.computrabajoMaxPages };
   }
   if (isEnabled("CL")) all.trabajando = { source: trabajando, maxPages: config.trabajandoMaxPages };
+  // Get on Board: avisos de tecnología, en todos los países abiertos.
+  for (const country of ENABLED_COUNTRIES) {
+    all[`getonboard-${country.toLowerCase()}`] = { source: getonboard(country), maxPages: config.getonboardMaxPages };
+  }
   return all;
 }
 

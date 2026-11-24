@@ -27,6 +27,12 @@ else if (cmd === "stats") {
   }
   const t = (await fetchJson("https://www.trabajando.cl/api/searchjob?pagina=1&orden=FECHA_PUBLICACION")) as { cantidadRegistros: number };
   out.trabajando = t.cantidadRegistros;
+  // Get on Board no da el total: se cuentan los avisos de su listado de cada país abierto.
+  const { getonboard } = await import("./sources/getonboard.ts");
+  const { ENABLED_COUNTRIES } = await import("./text.ts");
+  for (const c of ENABLED_COUNTRIES) {
+    out[`getonboard-${c.toLowerCase()}`] = (await getonboard(c)({ maxPages: 50, isKnown: () => false })).jobs.length;
+  }
   // Computrabajo: la suma de sus páginas de región, al momento de generar el archivo de regiones.
   const regions = JSON.parse(readFileSync(new URL("./sources/computrabajo-regions.json", import.meta.url), "utf8"));
   for (const [cc, site] of Object.entries(regions) as Array<[string, { regions: Array<{ count: number }> }]>) {
