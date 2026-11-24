@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { z } from "zod";
+import { config } from "../config.ts";
 import { fetchText, sleep } from "./http.ts";
 import { decodeEntities, modalityOf, regionOf, stripHtml, type Country } from "../text.ts";
 import type { NewJob, Source } from "./types.ts";
@@ -131,7 +132,7 @@ export function computrabajo(siteKey: string): Source {
     for (const region of site.regions) {
       for (let page = 1; page <= maxPages; page++) {
         const url = `https://${site.domain}/${site.prefix}${region.slug}?by=publicationtime${page > 1 ? `&p=${page}` : ""}`;
-        const listing = parseListing(await fetchText(url));
+        const listing = parseListing(await fetchText(url, config.computrabajoProxyUrl));
         pages++;
         // Toda región listada tiene avisos: una página vacía es un bloqueo o un cambio en el HTML.
         if (page === 1 && listing.length === 0) throw new Error(`${url} no trae avisos (¿bloqueo o cambio del HTML?)`);
@@ -143,7 +144,7 @@ export function computrabajo(siteKey: string): Source {
           if (seen.has(id) || isKnown(id)) continue;
           seen.add(id);
           // Un aviso que falla (despublicado entre el listado y el detalle) no detiene la corrida.
-          const job = await fetchText(`https://${site.domain}${item.path}`)
+          const job = await fetchText(`https://${site.domain}${item.path}`, config.computrabajoProxyUrl)
             .then((html) => toJob(siteKey, region.name, item, html))
             .catch(() => null);
           if (job) {

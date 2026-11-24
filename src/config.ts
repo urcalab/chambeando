@@ -22,7 +22,8 @@ export const config = {
     apiKey: env.LLM_API_KEY ?? "",
     model: env.LLM_MODEL ?? "anthropic/claude-haiku-5.5",
   },
-  ingestEveryMinutes: int(env.INGEST_EVERY_MINUTES, 60),
+  /** Intervalo de ingesta y recomendaciones automáticas. */
+  ingestEveryMinutes: int(env.INGEST_EVERY_MINUTES, 120),
   /** Sitios Jobint a recorrer (claves de JOBINT_SITES). */
   jobintSites: (env.JOBINT_SITES ?? "laborum,bumeran-ar,bumeran-mx,bumeran-pe,multitrabajos,konzerta,bumeran-ve")
     .split(",").map((s) => s.trim()).filter(Boolean),
@@ -31,6 +32,8 @@ export const config = {
   computrabajoSites: env.COMPUTRABAJO_SITES?.split(",").map((s) => s.trim()).filter(Boolean) ?? null,
   /** Páginas de 20 avisos por región en cada corrida. */
   computrabajoMaxPages: int(env.COMPUTRABAJO_MAX_PAGES, 1),
+  /** Proxy HTTP(S) de salida exclusivo para Computrabajo. Vacío: conexión directa. */
+  computrabajoProxyUrl: env.COMPUTRABAJO_PROXY_URL || undefined,
   /** Horas que se deja descansar una fuente que respondió 403 o 429 antes de volver a intentarlo. */
   blockedSourceBackoffHours: int(env.BLOCKED_SOURCE_BACKOFF_HOURS, 24),
   trabajandoMaxPages: int(env.TRABAJANDO_MAX_PAGES, 20),
