@@ -23,7 +23,7 @@ export const config = {
     model: env.LLM_MODEL ?? "anthropic/claude-haiku-5.5",
   },
   /** Intervalo de ingesta y recomendaciones automáticas. */
-  ingestEveryMinutes: int(env.INGEST_EVERY_MINUTES, 120),
+  ingestEveryMinutes: int(env.INGEST_EVERY_MINUTES, 60),
   /** Sitios Jobint a recorrer (claves de JOBINT_SITES). */
   jobintSites: (env.JOBINT_SITES ?? "laborum,bumeran-ar,bumeran-mx,bumeran-pe,multitrabajos,konzerta,bumeran-ve")
     .split(",").map((s) => s.trim()).filter(Boolean),

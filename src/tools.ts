@@ -65,7 +65,10 @@ function userVector(db: DatabaseSync, phone: string): Float32Array {
   return fromBlob(row.embedding);
 }
 
-export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | null = null) {
+/** `profileSaved` corre después de guardar un perfil, con el anterior (null si es nuevo); no debe demorar la respuesta. */
+export type ToolHooks = { profileSaved?: (old: User | null, user: User) => void };
+
+export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | null = null, hooks: ToolHooks = {}) {
   /**
    * Busca, marca como enviados los resultados y los devuelve para que el agente los muestre.
    * Con `review`, el modelo descarta primero los que no calzan con el perfil; si el modelo
@@ -159,6 +162,7 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
         db.prepare("UPDATE users SET matched_until = ? WHERE phone = ?").run(new Date(Date.now() - 3 * 86_400_000).toISOString(), p.phone);
       }
       const user = getUser(db, p.phone)!;
+      hooks.profileSaved?.(old, user);
       return {
         guardado: true,
         nuevo: !old,
@@ -234,11 +238,12 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
     /** Pausa o reanuda los avisos automáticos. */
     async pausar_avisos(input: unknown) {
       const p = z.object({ phone: Phone, pausar: z.boolean() }).parse(input);
-      requireUser(db, p.phone);
+      const old = requireUser(db, p.phone);
       // Al reanudar no se mandan de golpe los avisos acumulados durante la pausa.
       db.prepare("UPDATE users SET active = ?, matched_until = ?, updated_at = ? WHERE phone = ?").run(
         p.pausar ? 0 : 1, now(), now(), p.phone,
       );
+      if (!p.pausar) hooks.profileSaved?.(old, getUser(db, p.phone)!);
       return { activo: !p.pausar };
     },
 

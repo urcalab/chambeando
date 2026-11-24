@@ -2,7 +2,8 @@ import { readFileSync } from "node:fs";
 import { z } from "zod";
 import { config } from "../config.ts";
 import { fetchText, sleep } from "./http.ts";
-import { decodeEntities, modalityOf, regionOf, stripHtml, type Country } from "../text.ts";
+import type { User } from "../db.ts";
+import { decodeEntities, modalityOf, regionMatches, regionOf, stripHtml, type Country } from "../text.ts";
 import type { NewJob, Source } from "./types.ts";
 
 /**
@@ -15,7 +16,8 @@ type RegionFile = Record<string, { prefix: string; regions: Array<{ slug: string
 // Generado por scripts/computrabajo-regions.ts: las páginas de región que existen en cada país.
 const REGION_FILE = JSON.parse(readFileSync(new URL("./computrabajo-regions.json", import.meta.url), "utf8")) as RegionFile;
 
-export type ComputrabajoSite = { country: Country; domain: string; prefix: string; regions: Array<{ slug: string; name: string }> };
+export type Region = { slug: string; name: string };
+export type ComputrabajoSite = { country: Country; domain: string; prefix: string; regions: Region[] };
 
 /** Un sitio por país: "computrabajo-co", "computrabajo-mx"... */
 export const COMPUTRABAJO_SITES: Record<string, ComputrabajoSite> = Object.fromEntries(
@@ -24,6 +26,20 @@ export const COMPUTRABAJO_SITES: Record<string, ComputrabajoSite> = Object.fromE
     { country: cc.toUpperCase() as Country, domain: `${cc}.computrabajo.com`, prefix: site.prefix, regions: site.regions },
   ]),
 );
+
+/**
+ * Las regiones de un sitio que piden estas personas (las activas de su país), con la misma regla del match.
+ * Alguien sin regiones acepta todo el país; si no hay nadie, no se pide ninguna.
+ */
+export function regionsFor(siteKey: string, users: Array<Pick<User, "regions">>): Region[] {
+  const site = COMPUTRABAJO_SITES[siteKey]!;
+  if (users.some((u) => u.regions.length === 0)) return site.regions;
+  const wanted = users.flatMap((u) => u.regions);
+  return site.regions.filter((r) => {
+    const key = regionOf(site.country, r.name);
+    return key !== null && regionMatches(wanted, key);
+  });
+}
 
 // Pausas generosas: Computrabajo es el portal más sensible a la carga (bloqueó al servidor con 403).
 const DETAIL_PAUSE_MS = 1500;
@@ -121,42 +137,57 @@ export function toJob(siteKey: string, regionName: string, listed: Listed, detai
   };
 }
 
-export function computrabajo(siteKey: string): Source {
+/**
+ * Recorre `regions` (todas, si no se dicen). Una región que falla, aun después de los reintentos del proxy, no detiene
+ * a las demás: solo si fallan todas la fuente queda con error (y si fue un 403 o 429, descansa).
+ */
+export function computrabajo(siteKey: string, regions?: Region[], get = fetchText): Source {
   const site = COMPUTRABAJO_SITES[siteKey];
   if (!site) throw new Error(`Sitio Computrabajo desconocido: ${siteKey}`);
+  const covered = regions ?? site.regions;
   return async ({ maxPages, isKnown }) => {
     const jobs: NewJob[] = [];
     const seen = new Set<string>();
+    const failed: string[] = [];
     let invalid = 0;
     let pages = 0;
-    for (const region of site.regions) {
-      for (let page = 1; page <= maxPages; page++) {
-        const url = `https://${site.domain}/${site.prefix}${region.slug}?by=publicationtime${page > 1 ? `&p=${page}` : ""}`;
-        const listing = parseListing(await fetchText(url, config.computrabajoProxyUrl));
-        pages++;
-        // Toda región listada tiene avisos: una página vacía es un bloqueo o un cambio en el HTML.
-        if (page === 1 && listing.length === 0) throw new Error(`${url} no trae avisos (¿bloqueo o cambio del HTML?)`);
-        // Primera vez en esta región: solo la primera página, para no pedir miles de detalles de una vez.
-        const cold = page === 1 && !listing.some((item) => isKnown(`${siteKey}:${item.id}`));
-        let fresh = 0;
-        for (const item of listing) {
-          const id = `${siteKey}:${item.id}`;
-          if (seen.has(id) || isKnown(id)) continue;
-          seen.add(id);
-          // Un aviso que falla (despublicado entre el listado y el detalle) no detiene la corrida.
-          const job = await fetchText(`https://${site.domain}${item.path}`, config.computrabajoProxyUrl)
-            .then((html) => toJob(siteKey, region.name, item, html))
-            .catch(() => null);
-          if (job) {
-            jobs.push(job);
-            fresh++;
-          } else invalid++;
-          await sleep(DETAIL_PAUSE_MS);
+    for (const region of covered) {
+      try {
+        for (let page = 1; page <= maxPages; page++) {
+          const url = `https://${site.domain}/${site.prefix}${region.slug}?by=publicationtime${page > 1 ? `&p=${page}` : ""}`;
+          const listing = parseListing(await get(url, config.computrabajoProxyUrl));
+          pages++;
+          // Toda región listada tiene avisos: una página vacía es un bloqueo o un cambio en el HTML.
+          if (page === 1 && listing.length === 0) throw new Error(`${url} no trae avisos (¿bloqueo o cambio del HTML?)`);
+          // Primera vez en esta región: solo la primera página, para no pedir miles de detalles de una vez.
+          const cold = page === 1 && !listing.some((item) => isKnown(`${siteKey}:${item.id}`));
+          let fresh = 0;
+          for (const item of listing) {
+            const id = `${siteKey}:${item.id}`;
+            if (seen.has(id) || isKnown(id)) continue;
+            seen.add(id);
+            // Un aviso que falla (despublicado entre el listado y el detalle) no detiene la corrida.
+            const job = await get(`https://${site.domain}${item.path}`, config.computrabajoProxyUrl)
+              .then((html) => toJob(siteKey, region.name, item, html))
+              .catch(() => null);
+            if (job) {
+              jobs.push(job);
+              fresh++;
+            } else invalid++;
+            await sleep(DETAIL_PAUSE_MS);
+          }
+          if (fresh === 0 || cold) break;
+          await sleep(PAGE_PAUSE_MS);
         }
-        if (fresh === 0 || cold) break;
-        await sleep(PAGE_PAUSE_MS);
+      } catch (e) {
+        failed.push((e as Error).message);
       }
     }
-    return { jobs, pages, invalid };
+    if (covered.length && failed.length === covered.length) {
+      throw new Error(failed.find((m) => /respondió (403|429)\b/.test(m)) ?? failed[0]);
+    }
+    const note = `${covered.length} de ${site.regions.length} regiones` +
+      (failed.length ? `; fallaron ${failed.length}: ${failed[0]}` : "");
+    return { jobs, pages, invalid, note };
   };
 }

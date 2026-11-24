@@ -127,7 +127,17 @@ ordenado por fecha, y el detalle de cada aviso nuevo (JSON-LD, o el HTML si no l
 frágil: si el portal cambia su HTML, la corrida lo informa como error de esa fuente. Solo recorre rutas que
 su `robots.txt` permite. Los portales que prohíben el rastreo o lo bloquean no se incluyen. La lista de regiones por
 país está en `src/sources/computrabajo-regions.json` y se regenera con `node scripts/computrabajo-regions.ts`.
-La primera corrida trae solo la primera página de cada región (unos 20 avisos) y tarda cerca de una hora.
+
+Solo se recorren las regiones que piden las personas activas (`regionsFor`, con la misma regla del match): alguien
+sin regiones acepta todo su país, y un país sin nadie activo no se pide. Cuando un perfil nuevo, cambiado o
+reanudado pide una región que la corrida no recorría, se trae en segundo plano en ese momento (`ingestNewRegions`
+en `src/cycle.ts`). La corrida siguiente cruza y manda lo que haya llegado. La primera vez que se recorre una región
+se trae solo su primera página (unos 20 avisos).
+
+Desde el servidor de producción Computrabajo responde 403, así que sus pedidos salen por un proxy
+(`COMPUTRABAJO_PROXY_URL`). El proxy cambia de IP y algunas están bloqueadas: un 403, 429, error 5xx o timeout se
+reintenta hasta 4 veces por un túnel nuevo. Una región que sigue fallando no detiene a las demás. Solo si fallan
+todas, la fuente queda con error, y si fue un 403 o 429, descansa 24 horas (`BLOCKED_SOURCE_BACKOFF_HOURS`).
 
 `node src/cli.ts counts` muestra cuántos avisos declara cada portal; de ahí sale la tabla de la landing.
 
@@ -145,7 +155,7 @@ El agente lo arma conversando y lo guarda con `guardar_preferencias`: qué busca
 trabajo, tipo de trabajo (`practica`, `part_time`, `full_time`), cargos, región, modalidad, sueldo mínimo y
 exclusiones. Al crear o modificar el perfil, busca de inmediato entre los avisos ya guardados. `buscar_avisos`
 también busca de inmediato cuando la persona lo pide. La ingesta, el match y los envíos automáticos corren cada
-dos horas. El tipo de trabajo es un filtro duro: se lee de la jornada del aviso y, para las prácticas, del
+hora. El tipo de trabajo es un filtro duro: se lee de la jornada del aviso y, para las prácticas, del
 título (`jobKind` en `src/text.ts`). A quien busca su primer trabajo, el modelo le descarta los avisos que piden
 más de un año de experiencia.
 
@@ -180,7 +190,7 @@ uno. Un trigger impide editar filas; solo se borran las de más de 180 días (`A
 
     cp .env.example .env    # completar
     npm install
-    node --env-file=.env src/server.ts   # servidor + corrida cada dos horas
+    node --env-file=.env src/server.ts   # servidor + corrida cada hora
     npm run ingest                       # solo traer avisos
     npm test                             # también corre solo en cada git push
 

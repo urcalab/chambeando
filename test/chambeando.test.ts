@@ -11,12 +11,13 @@ import { maskPhone, phoneId } from "../src/admin.ts";
 import { createApp } from "../src/server.ts";
 import type { AddressInfo } from "node:net";
 import { dedupeKey, ingest, localityOf, sameLocality } from "../src/ingest.ts";
-import { restingSources } from "../src/cycle.ts";
+import { newRegions, restingSources, sources } from "../src/cycle.ts";
 import type { Embedder } from "../src/embed.ts";
 import { parseVerdicts, type Judge } from "../src/llm.ts";
 import { matchAll, passesFilters } from "../src/match.ts";
 import { canMessageNow, formatMessage, notifyAll, type Sender } from "../src/notify.ts";
-import { parseListing, toJob as computrabajoJob } from "../src/sources/computrabajo.ts";
+import { computrabajo, parseListing, regionsFor, toJob as computrabajoJob } from "../src/sources/computrabajo.ts";
+import { HttpError, retryable, withRetries } from "../src/sources/http.ts";
 import { parseJobintDate, toJob as jobintJob } from "../src/sources/jobint.ts";
 import { toJob as trabajandoJob } from "../src/sources/trabajando.ts";
 import type { NewJob } from "../src/sources/types.ts";
@@ -610,4 +611,74 @@ test("si el modelo falla, los avisos se reintentan en la próxima corrida", asyn
   });
   assert.equal(failed.errors.length, 1);
   assert.equal((await matchAll(db, approveAll)).pending, 1);
+});
+
+test("Computrabajo: solo las regiones que piden las personas activas", async () => {
+  const slugs = (key: string, users: Array<{ regions: string[] }>) => regionsFor(key, users).map((r) => r.slug).sort();
+  assert.deepEqual(slugs("computrabajo-cl", []), []);
+  assert.deepEqual(slugs("computrabajo-cl", [{ regions: ["valparaiso"] }]), ["valparaiso"]);
+  assert.deepEqual(slugs("computrabajo-cl", [{ regions: ["valparaiso"] }, { regions: ["metropolitana", "biobio"] }]), ["biobio", "rmetropolitana", "valparaiso"]);
+  // Alguien sin regiones acepta todo su país.
+  assert.equal(regionsFor("computrabajo-cl", [{ regions: ["valparaiso"] }, { regions: [] }]).length, 14);
+  // La misma clave que usa el match: "CDMX" es la página "Ciudad de México DF", no "Estado de México".
+  assert.deepEqual(slugs("computrabajo-mx", [{ regions: [regionOf("MX", "CDMX")!] }]), ["ciudad-de-mexico"]);
+  // Sin nadie activo en el país, la corrida no le pide nada a Computrabajo.
+  const res = await sources(openDb(":memory:"))["computrabajo-cl"]!.source({ maxPages: 1, isKnown: () => false });
+  assert.deepEqual([res.jobs.length, res.pages, res.note], [0, 0, "0 de 14 regiones"]);
+});
+
+test("Computrabajo: una región bloqueada no detiene a las demás; si fallan todas, la fuente queda con el 403", async () => {
+  const listing = `<div><article class="box_offer" data-id='74C2C0B04F7E027161373E686DCF3405' id="x">
+    <h2><a class="js-o-link fc_base" href="/ofertas-de-trabajo/oferta-de-trabajo-de-asesor-74C2C0B04F7E027161373E686DCF3405#lc=ListOffers-Score-0">
+      Asesor </a></h2></article></div>`;
+  const detail = `<script type="application/ld+json">${JSON.stringify({
+    "@type": "JobPosting", description: "Atención al cliente", datePosted: "2026-11-21", hiringOrganization: { name: "Activos" },
+  })}</script>`;
+  const blocked = (url: string): never => { throw new HttpError(url, 403); };
+  const regions = regionsFor("computrabajo-cl", [{ regions: ["valparaiso", "biobio"] }]);
+  const get = async (url: string) => (url.includes("/ofertas-de-trabajo/") ? detail : url.includes("biobio") ? blocked(url) : listing);
+  const res = await computrabajo("computrabajo-cl", regions, get)({ maxPages: 1, isKnown: () => false });
+  assert.deepEqual(res.jobs.map((j) => j.region), ["valparaiso"]);
+  assert.match(res.note!, /^2 de 14 regiones; fallaron 1: https:\/\/cl\.computrabajo\.com\/.*biobio.* respondió 403$/);
+  await assert.rejects(computrabajo("computrabajo-cl", regions, async (url) => blocked(url))({ maxPages: 1, isKnown: () => false }), /respondió 403/);
+});
+
+test("proxy: un bloqueo o un corte se reintenta por otro túnel; un 404 no", async () => {
+  let calls = 0;
+  let rotations = 0;
+  const flaky = async () => {
+    if (++calls < 3) throw new HttpError("https://x", 403);
+    return "ok";
+  };
+  assert.equal(await withRetries(4, flaky, () => rotations++, 0), "ok");
+  assert.deepEqual([calls, rotations], [3, 2]);
+  calls = 0;
+  await assert.rejects(withRetries(4, async () => { calls++; throw new HttpError("https://x", 404); }, () => {}, 0), /respondió 404/);
+  assert.equal(calls, 1);
+  calls = 0;
+  // Agotados los intentos, el error es el mismo "respondió 403" que hace descansar a la fuente.
+  await assert.rejects(withRetries(4, async () => { calls++; throw new HttpError("https://x", 403); }, () => {}, 0), /^Error: https:\/\/x respondió 403$/);
+  assert.equal(calls, 4);
+  assert.ok(retryable(new Error("fetch failed")) && retryable(new HttpError("https://x", 502)) && !retryable(new HttpError("https://x", 410)));
+});
+
+test("un perfil que pide una región que nadie pedía la trae en segundo plano", async () => {
+  const db = openDb(":memory:");
+  const calls: string[][] = [];
+  const tools = createTools(db, fakeEmbed, null, {
+    profileSaved: (old, user) => calls.push(newRegions(db, old, user)?.regions.map((r) => r.slug) ?? []),
+  });
+  await tools.guardar_preferencias({ phone: "+56911112222", resumen: "vendedor", regiones: ["Valparaíso"] });
+  // Otra persona en la misma región: la corrida ya la recorre.
+  await tools.guardar_preferencias({ phone: "+56933334444", resumen: "cajero", regiones: ["Valparaíso"] });
+  // Sumar una región nueva la trae; cambiar otra cosa del perfil no.
+  await tools.guardar_preferencias({ phone: "+56933334444", regiones: ["Valparaíso", "Biobío"] });
+  await tools.guardar_preferencias({ phone: "+56933334444", resumen: "cajero de supermercado" });
+  // Mientras estuvo en pausa nadie pedía Biobío: al reanudar se trae.
+  await tools.pausar_avisos({ phone: "+56933334444", pausar: true });
+  await tools.pausar_avisos({ phone: "+56933334444", pausar: false });
+  // Sin regiones: todo el país, menos lo que ya se recorre.
+  await tools.guardar_preferencias({ phone: "+56955556666", resumen: "bodeguero" });
+  assert.deepEqual(calls.slice(0, 5), [["valparaiso"], [], ["biobio"], [], ["biobio"]]);
+  assert.equal(calls[5]!.length, 12);
 });

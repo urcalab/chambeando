@@ -17,8 +17,49 @@ function proxyDispatcher(proxyUrl: string): Dispatcher {
   return agent;
 }
 
-/** Pide una página HTML a un portal, opcionalmente a través de un proxy HTTP(S). */
-export async function fetchText(url: string, proxyUrl?: string): Promise<string> {
+/** Cierra las conexiones abiertas con el proxy, para que el próximo pedido salga por un túnel nuevo (y otra IP). */
+function rotateProxy(proxyUrl: string): void {
+  const agent = proxyAgents.get(proxyUrl);
+  proxyAgents.delete(proxyUrl);
+  agent?.close().catch(() => {});
+}
+
+/** Un portal respondió con un código de error. El mensaje ("… respondió 403") es lo que mira el descanso de fuentes. */
+export class HttpError extends Error {
+  status: number;
+  constructor(url: string, status: number) {
+    super(`${url} respondió ${status}`);
+    this.status = status;
+  }
+}
+
+/** Intentos por pedido a través del proxy: cada intento sale por otra IP, y algunas de esas IPs están bloqueadas. */
+export const PROXY_ATTEMPTS = 4;
+
+/** Un bloqueo (403, 429), un error del servidor, un timeout o un corte de red: vale la pena reintentar. Un 404 no. */
+export function retryable(e: unknown): boolean {
+  return !(e instanceof HttpError) || e.status === 403 || e.status === 429 || e.status >= 500;
+}
+
+/** Corre `fn` hasta `attempts` veces mientras falle con algo que vale la pena reintentar; si no, lanza el último error. */
+export async function withRetries<T>(
+  attempts: number,
+  fn: () => Promise<T>,
+  onRetry: () => void = () => {},
+  pauseMs = 1000,
+): Promise<T> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      if (attempt >= attempts || !retryable(e)) throw e;
+      onRetry();
+      await sleep(pauseMs * attempt);
+    }
+  }
+}
+
+async function fetchOnce(url: string, proxyUrl?: string): Promise<string> {
   const options = {
     headers: { "user-agent": UA, accept: "text/html", "accept-language": "es" },
     signal: AbortSignal.timeout(30_000),
@@ -26,8 +67,20 @@ export async function fetchText(url: string, proxyUrl?: string): Promise<string>
   const res = proxyUrl
     ? await undiciFetch(url, { ...options, dispatcher: proxyDispatcher(proxyUrl) })
     : await fetch(url, options);
-  if (!res.ok) throw new Error(`${url} respondió ${res.status}`);
+  if (!res.ok) {
+    await res.body?.cancel().catch(() => {});
+    throw new HttpError(url, res.status);
+  }
   return res.text();
+}
+
+/**
+ * Pide una página HTML a un portal, opcionalmente a través de un proxy HTTP(S). Por el proxy, un bloqueo se reintenta
+ * por un túnel nuevo; sin proxy no, porque desde la misma IP insistir solo alarga el bloqueo.
+ */
+export async function fetchText(url: string, proxyUrl?: string): Promise<string> {
+  if (!proxyUrl) return fetchOnce(url);
+  return withRetries(PROXY_ATTEMPTS, () => fetchOnce(url, proxyUrl), () => rotateProxy(proxyUrl));
 }
 
 /** Pide JSON a un portal. Falla con un mensaje claro si llega otra cosa (por ejemplo la página de Cloudflare). */

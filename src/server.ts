@@ -4,14 +4,14 @@ import { createServer, type IncomingMessage, type ServerResponse } from "node:ht
 import type { DatabaseSync } from "node:sqlite";
 import { ZodError } from "zod";
 import { config } from "./config.ts";
-import { runCycle } from "./cycle.ts";
+import { ingestNewRegions, runCycle } from "./cycle.ts";
 import { openDb } from "./db.ts";
 import { llmJudge, type Judge } from "./llm.ts";
 import { localEmbedder, type Embedder } from "./embed.ts";
 import { createAdmin, logCall } from "./admin.ts";
 import { recordClick, stats } from "./feedback.ts";
 import { normalizePhone } from "./text.ts";
-import { ToolError, createTools } from "./tools.ts";
+import { ToolError, createTools, type ToolHooks } from "./tools.ts";
 
 function authorized(req: IncomingMessage, key: string): boolean {
   const given = Buffer.from(req.headers.authorization ?? "");
@@ -63,8 +63,9 @@ export function createApp(
   apiKey: string,
   judge: Judge | null = null,
   adminKey = config.adminApiKey,
+  hooks: ToolHooks = {},
 ) {
-  const tools = createTools(db, embed, judge);
+  const tools = createTools(db, embed, judge, hooks);
   const admin = createAdmin(db);
   return createServer(async (req, res) => {
     const started = performance.now();
@@ -156,7 +157,16 @@ export function createApp(
 if (import.meta.main) {
   if (!config.backendApiKey) throw new Error("Falta BACKEND_API_KEY");
   const db = openDb(config.dbPath);
-  createApp(db, localEmbedder, config.backendApiKey, config.llm.apiKey ? llmJudge : null).listen(config.port, () => {
+  // Un perfil nuevo o cambiado puede pedir regiones que la corrida no recorre: se traen en segundo plano.
+  const hooks: ToolHooks = {
+    profileSaved: (old, user) => {
+      Promise.resolve()
+        .then(() => ingestNewRegions(db, localEmbedder, old, user))
+        .then((r) => r && console.log(new Date().toISOString(), "regiones nuevas:", JSON.stringify(r)))
+        .catch((e) => console.error("ingesta de regiones nuevas falló:", e));
+    },
+  };
+  createApp(db, localEmbedder, config.backendApiKey, config.llm.apiKey ? llmJudge : null, config.adminApiKey, hooks).listen(config.port, () => {
     console.log(`chambeando escuchando en :${config.port}`);
   });
   const tick = () =>

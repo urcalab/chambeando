@@ -6,7 +6,7 @@ import { ingest } from "./ingest.ts";
 
 const db = openDb(config.dbPath);
 const cmd = process.argv[2];
-if (cmd === "ingest") console.log(JSON.stringify(await ingest(db, localEmbedder, sources()), null, 2));
+if (cmd === "ingest") console.log(JSON.stringify(await ingest(db, localEmbedder, sources(db)), null, 2));
 else if (cmd === "run") console.log(JSON.stringify(await runCycle(db, localEmbedder), null, 2));
 else if (cmd === "stats") {
   const { stats } = await import("./feedback.ts");

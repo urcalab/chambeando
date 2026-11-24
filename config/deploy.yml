@@ -47,7 +47,7 @@ env:
     COUNTRIES: CL,MX,PE,CO
     VATIO_WORKSPACE: chambeando
     LLM_MODEL: anthropic/claude-haiku-5.5
-    INGEST_EVERY_MINUTES: "120"
+    INGEST_EVERY_MINUTES: "60"
 
 # La base SQLite sobrevive a cada deploy.
 volumes:

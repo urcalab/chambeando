@@ -135,6 +135,12 @@ export function regionOf(country: Country, location: string | null | undefined):
   return normalize(parts[parts.length - 1] ?? "") || null;
 }
 
+/** Igual, o una contiene a la otra: "lima" calza con "lima metropolitana". */
+export function regionMatches(wanted: string[], region: string): boolean {
+  const r = ` ${region} `;
+  return wanted.some((w) => w === region || r.includes(` ${w} `) || ` ${w} `.includes(r));
+}
+
 export const COUNTRY_TZ: Record<Country, string> = {
   AR: "America/Argentina/Buenos_Aires", BO: "America/La_Paz", CL: "America/Santiago", CO: "America/Bogota",
   CR: "America/Costa_Rica", DO: "America/Santo_Domingo", EC: "America/Guayaquil", SV: "America/El_Salvador",

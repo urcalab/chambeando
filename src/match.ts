@@ -3,7 +3,7 @@ import { config } from "./config.ts";
 import { fromBlob, now, rowToUser, type Job, type User } from "./db.ts";
 import { dot } from "./embed.ts";
 import type { Judge, PastFeedback } from "./llm.ts";
-import { jobKind, normalize } from "./text.ts";
+import { jobKind, normalize, regionMatches } from "./text.ts";
 
 const KIND_WORDS = { practica: "práctica profesional", part_time: "part-time, medio tiempo", full_time: "tiempo completo" };
 
@@ -37,12 +37,6 @@ export function passesFilters(
   const title = ` ${normalize(job.title)} `;
   if (user.exclude.some((x) => normalize(x) && title.includes(` ${normalize(x)} `))) return false;
   return true;
-}
-
-/** Igual, o una contiene a la otra: "lima" calza con "lima metropolitana". */
-function regionMatches(wanted: string[], region: string): boolean {
-  const r = ` ${region} `;
-  return wanted.some((w) => w === region || r.includes(` ${w} `) || ` ${w} `.includes(r));
 }
 
 export type Scored = { job: Job; score: number };
