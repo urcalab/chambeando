@@ -4,7 +4,7 @@ Un agente de WhatsApp que busca trabajo por ti. La persona le cuenta qué estudi
 cada hora los avisos nuevos de los portales de empleo de su país y le escribe cuando aparece uno que le sirve,
 con el link para postular. Pensado para quien busca su primer trabajo, una práctica o algo part-time.
 
-**https://chambeando.urcalab.com** · Chile, México, Perú y Colombia · código abierto (MIT)
+**https://chambeando.app** · Chile, México, Perú y Colombia · código abierto (MIT)
 
 El agente corre sobre [Vatio](https://vatio.ai), la plataforma para agentes siempre encendidos. Este repositorio es
 el backend que le da los avisos; la conversación, la memoria, WhatsApp y las pruebas del agente las pone Vatio.
@@ -207,8 +207,8 @@ Hugging Face la primera vez y usa unos 550 MB de RAM.
 
 ## Despliegue
 
-La landing (`site/index.html`) la sirve un Worker de Cloudflare en la raíz de `chambeando.urcalab.com`
-(`landing/wrangler.jsonc`, desplegado por `.github/workflows/deploy-landing.yml`), así que las visitas a la
+La landing (`site/index.html`) la sirve un Worker de Cloudflare en `chambeando.app` (el dominio entero) y en la
+raíz de `chambeando.urcalab.com` (`landing/wrangler.jsonc`, desplegado por `.github/workflows/deploy-landing.yml`), así que las visitas a la
 página no llegan al droplet. El resto de las rutas (`/tools/*`, `/r/*`, `/health`, `/stats`) van al backend.
 
 Corre en un droplet compartido, detrás de kamal-proxy y Cloudflare, en https://chambeando.urcalab.com.
