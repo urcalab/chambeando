@@ -5,7 +5,7 @@ import type { Country, Frequency, JobKind, Modality } from "./text.ts";
 
 export type Job = {
   id: string;
-  /** El portal donde se publicó: laborum, bumeran, multitrabajos, konzerta, trabajando. */
+  /** El portal donde se publicó: computrabajo, laborum, bumeran, multitrabajos, konzerta, trabajando, getonboard, bne, chiletrabajos, magneto. */
   source: string;
   source_id: string;
   country: Country;

@@ -51,7 +51,7 @@ flowchart LR
 
 | Pieza | Dónde | Qué hace |
 |---|---|---|
-| Conectores | `src/sources/` | Jobint (Laborum, Bumeran), Computrabajo, Trabajando y Get on Board |
+| Conectores | `src/sources/` | Jobint (Laborum, Bumeran), Computrabajo, Trabajando, Chiletrabajos, Bolsa Nacional de Empleo, Magneto y Get on Board |
 | Ingesta | `src/ingest.ts` | Guarda los avisos nuevos, deduplica y calcula embeddings |
 | Embeddings | `src/embed.ts` | `multilingual-e5-small` en el mismo proceso, sin costo por llamada |
 | Match | `src/match.ts`, `src/llm.ts` | Filtros, similitud y juez (Claude Haiku vía OpenRouter) |
@@ -110,10 +110,10 @@ El servicio está abierto en **Chile, México, Perú y Colombia** (variable `COU
 
 | País | Portales |
 |---|---|
-| Chile | Computrabajo, Laborum, Trabajando, Get on Board |
+| Chile | Computrabajo, Laborum, Trabajando, Chiletrabajos, Bolsa Nacional de Empleo, Get on Board |
 | México | Computrabajo, Bumeran, Get on Board |
 | Perú | Computrabajo, Bumeran, Get on Board |
-| Colombia | Computrabajo, Get on Board |
+| Colombia | Computrabajo, Magneto, Get on Board |
 
 Los conectores ya cubren otros 13 países de Latinoamérica (Jobint en 7 y Computrabajo en 17); se abren
 agregando su código a `COUNTRIES`. Mientras no estén ahí, no se traen sus avisos ni se aceptan sus números.
@@ -147,6 +147,32 @@ ofrece más. El sueldo viene bruto en dólares: va como texto al comienzo de la 
 Board" como fuente (los mensajes dicen en qué portal se publicó cada aviso), enlazar a la página del aviso, mostrar
 los datos sin cambios y refrescados al menos cada 24 horas, y no usarlos en un producto que cobre a quien busca
 trabajo, revenderlos ni entrenar modelos con ellos.
+
+Chiletrabajos (`src/sources/chiletrabajos.ts`) no tiene API: se lee el HTML de su listado y el JSON-LD (JobPosting)
+de cada aviso nuevo, por rutas que su robots.txt permite. El listado ordena por día y no por hora (los destacados van
+primero, mezclados), así que cada corrida recorre entero el listado de hoy (antes de las 2 de la mañana, desde ayer) y
+pide el detalle solo de los avisos que no conoce, con un tope de 200 por corrida: la primera vez el resto llega en las
+corridas siguientes. La región sale del código ISO del aviso ("RM", "BI") y las prácticas se reconocen por su
+categoría, porque el portal las publica como jornada completa.
+
+La Bolsa Nacional de Empleo (`src/sources/bne.ts`, Chile) es la bolsa pública del Ministerio del Trabajo; muchos de
+sus avisos los publican las OMIL y no están en otros portales. Se lee la API de su propio buscador
+(`POST /api/ofertas/busqueda`, que su robots.txt no restringe), del aviso más nuevo al más viejo, hasta la primera
+página sin nada nuevo. Solo sus avisos propios: las "ofertas externas" del buscador son copias de otros portales. El
+sueldo viene como rango: va como texto al comienzo de la descripción (y en el mensaje), y `salary` guarda el tope,
+para que el filtro de sueldo mínimo descarte solo lo que ni en su tope alcanza.
+
+Magneto (`src/sources/magneto.ts`, Colombia) es el portal de empleo de Comfama. No tiene API: su buscador es una
+página de Next.js que trae 20 avisos completos por página, del más nuevo al más viejo, dentro del payload de React
+Server Components (`self.__next_f.push`), con la descripción como fila de texto aparte. Su robots.txt prohíbe las URLs
+con `?` salvo la paginación, así que solo se pide `/co/trabajos/buscar?paginator[page]=N`. Si una primera página
+viene sin avisos, la corrida lo informa como error de esa fuente. El contrato de aprendizaje (SENA) se marca como
+práctica, y el sueldo, si es rango, va como en la BNE.
+
+Se revisaron y no se incluyen: el Portal del Empleo de México, cuya búsqueda pide un hCaptcha; Empleos Públicos
+(Chile), cuyo robots.txt solo permite `/pub/` y el listado está fuera; elempleo.com (Colombia) y Firstjob, cuyos
+términos prohíben extraer avisos sin permiso escrito; OCC (México), que bloquea; LinkedIn e Indeed. Empleos Perú y
+Talento Perú no respondieron desde fuera de Perú.
 
 `node src/cli.ts counts` muestra cuántos avisos declara cada portal; de ahí sale la tabla de la landing.
 

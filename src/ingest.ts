@@ -42,10 +42,13 @@ export function sameLocality(a: string[], b: string[]): boolean {
   return a.length === 0 || b.length === 0 || a.some((w) => b.includes(w));
 }
 
+// Portales de un solo sitio: cada uno es su propio operador.
+const SINGLE_SITE = new Set(["trabajando", "bne", "magneto", "chiletrabajos"]);
+
 /** "computrabajo-mx" -> "computrabajo"; los sitios Jobint (laborum, bumeran-*, multitrabajos, konzerta) comparten operador. */
 export function operatorOf(sourceKey: string): string {
   if (sourceKey.startsWith("computrabajo")) return "computrabajo";
-  if (sourceKey === "trabajando") return "trabajando";
+  if (SINGLE_SITE.has(sourceKey)) return sourceKey;
   if (sourceKey.startsWith("getonboard")) return "getonboard";
   return "jobint";
 }

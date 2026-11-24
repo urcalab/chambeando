@@ -6,9 +6,12 @@ import { ingest, type IngestReport } from "./ingest.ts";
 import { llmJudge } from "./llm.ts";
 import { matchAll } from "./match.ts";
 import { notifyAll, vatioSender } from "./notify.ts";
+import { bne } from "./sources/bne.ts";
+import { chiletrabajos } from "./sources/chiletrabajos.ts";
 import { COMPUTRABAJO_SITES, computrabajo, regionsFor, type Region } from "./sources/computrabajo.ts";
 import { getonboard } from "./sources/getonboard.ts";
 import { jobint } from "./sources/jobint.ts";
+import { magneto } from "./sources/magneto.ts";
 import type { Source } from "./sources/types.ts";
 import { JOBINT_SITES } from "./sources/jobint.ts";
 import { trabajando } from "./sources/trabajando.ts";
@@ -40,6 +43,9 @@ export function sources(db: DatabaseSync): Record<string, { source: Source; maxP
     all[key] = { source: computrabajo(key, regionsFor(key, activeUsers(db, site.country))), maxPages: config.computrabajoMaxPages };
   }
   if (isEnabled("CL")) all.trabajando = { source: trabajando, maxPages: config.trabajandoMaxPages };
+  if (isEnabled("CL")) all.bne = { source: bne(), maxPages: config.bneMaxPages };
+  if (isEnabled("CL")) all.chiletrabajos = { source: chiletrabajos(), maxPages: config.chiletrabajosMaxPages };
+  if (isEnabled("CO")) all.magneto = { source: magneto(), maxPages: config.magnetoMaxPages };
   // Get on Board: avisos de tecnología, en todos los países abiertos.
   for (const country of ENABLED_COUNTRIES) {
     all[`getonboard-${country.toLowerCase()}`] = { source: getonboard(country), maxPages: config.getonboardMaxPages };

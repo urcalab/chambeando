@@ -21,6 +21,9 @@ import { HttpError, retryable, withRetries } from "../src/sources/http.ts";
 import { availableIn, getonboard, toJob as getonboardJob } from "../src/sources/getonboard.ts";
 import { parseJobintDate, toJob as jobintJob } from "../src/sources/jobint.ts";
 import { toJob as trabajandoJob } from "../src/sources/trabajando.ts";
+import { bne, salaryOf, toJob as bneJob } from "../src/sources/bne.ts";
+import { magneto, parsePage as magnetoPage, toJob as magnetoJob } from "../src/sources/magneto.ts";
+import { chiletrabajos, listingUrl, parseListing as chiletrabajosListing, toJob as chiletrabajosJob } from "../src/sources/chiletrabajos.ts";
 import type { NewJob } from "../src/sources/types.ts";
 import type { JobKind } from "../src/text.ts";
 import { createTools } from "../src/tools.ts";
@@ -829,4 +832,249 @@ test("Get on Board: recorre todas las páginas y, con el listado entero, deja de
   assert.equal(b.embedding, null);
   assert.equal((db.prepare("SELECT COUNT(*) AS n FROM deliveries WHERE job_id = 'getonboard-cl:b'").get() as { n: number }).n, 0);
   assert.notEqual((db.prepare("SELECT embedding FROM jobs WHERE id = 'getonboard-cl:a'").get() as { embedding: unknown }).embedding, null);
+});
+
+const bneOferta = (over: Record<string, unknown> = {}) => ({
+  id: 1604678,
+  codigoOferta: "2026-157353",
+  empresario: { idEmpresario: 121682, nombreComercial: "Gepys ", logotipo: "iVBOR..." },
+  nombrePuesto: "Técnico/a en Enfermería Arsenalero/a",
+  region: { id: 378, nombre: "Metropolitana" },
+  comuna: { id: 1135, nombre: "Estación Central" },
+  rangoSalarial: { id: 3, nombre: "$610.001 - $760.000" },
+  jornadaLaboral: { id: 9, nombre: "Jornada Completa" },
+  fechaPublicacion: "2026-11-24",
+  descripcion: "Funciones:\n•\tVigilar al paciente.\n\nRequisitos:\n•\tTitulado TENS.",
+  esEnadi: false,
+  ...over,
+});
+
+test("BNE: convierte un aviso, con el rango de sueldo como texto y el tope para el filtro", () => {
+  const job = bneJob(bneOferta())!;
+  assert.equal(job.id, "bne:1604678");
+  assert.equal(job.url, "https://www.bne.gob.cl/ofertas/1604678");
+  assert.deepEqual([job.company, job.location, job.region, job.job_type], ["Gepys", "Estación Central, Metropolitana", "metropolitana", "Jornada Completa"]);
+  assert.equal(jobKind(job.job_type, job.title), "full_time");
+  // El filtro de sueldo mínimo mira el tope: un aviso de hasta $760.000 sirve a quien pide $700.000.
+  assert.equal(job.salary, 760000);
+  const user = { regions: [], modalities: [], exclude: [], job_kinds: [] as JobKind[] };
+  assert.ok(passesFilters({ ...user, min_salary: 700000 }, job));
+  assert.ok(!passesFilters({ ...user, min_salary: 800000 }, job));
+  assert.match(job.description, /^Sueldo: \$610\.001 a \$760\.000\.\n\nFunciones:\n• Vigilar al paciente\./);
+  // El mensaje muestra el rango, no el tope solo, y dice de dónde viene.
+  const text = formatMessage([{ ...job, published_at: new Date().toISOString() } as any], "+56911112222");
+  assert.match(text, /Sueldo: \$610\.001 a \$760\.000\./);
+  assert.doesNotMatch(text, /Sueldo: \$760/);
+  assert.match(text, /Publicado hoy en la Bolsa Nacional de Empleo/);
+  // Sin tope no hay cifra, para no descartar un aviso que podría pagar lo pedido.
+  assert.deepEqual(salaryOf("Más de $3.000.000"), { salary: null, line: "Sueldo: más de $3.000.000." });
+  assert.deepEqual(salaryOf("Menos de $460.000"), { salary: 460000, line: "Sueldo: hasta $460.000." });
+  assert.deepEqual(salaryOf("A convenir"), { salary: null, line: null });
+  assert.equal(bneJob(bneOferta({ rangoSalarial: null, empresario: null }))?.salary, null);
+  assert.equal(bneJob(bneOferta({ nombrePuesto: " " })), null);
+});
+
+test("BNE: recorre del más nuevo al más viejo y para en la primera página sin nada nuevo", async () => {
+  const pages: Record<string, unknown> = {
+    0: { content: [bneOferta({ id: 3 }), bneOferta({ id: 2 }), { id: "roto" }], totalPages: 3, last: false },
+    1: { content: [bneOferta({ id: 1 })], totalPages: 3, last: false },
+    2: { content: [bneOferta({ id: 0 })], totalPages: 3, last: true },
+  };
+  const urls: string[] = [];
+  const get = async (url: string) => (urls.push(url), pages[new URL(url).searchParams.get("page")!]);
+  const res = await bne(get)({ maxPages: 10, isKnown: (id) => id === "bne:1" });
+  assert.deepEqual(res.jobs.map((j) => j.id), ["bne:3", "bne:2"]);
+  assert.equal(res.invalid, 1);
+  assert.equal(urls.length, 2);
+  assert.match(urls[0]!, /\/api\/ofertas\/busqueda\?page=0&size=50$/);
+});
+
+/** Una página del buscador de Magneto: el payload RSC partido en dos `push`, con la descripción como texto aparte. */
+function magnetoHtml(rows: unknown[], texts: Record<string, string>): string {
+  const tRows = Object.entries(texts).map(([id, t]) => `${id}:T${Buffer.byteLength(t).toString(16)},${t}`).join("");
+  const payload = `0:["$","div",null,{}]\n${tRows}5:{"algorithm":"x","totalRows":2,"rows":${JSON.stringify(rows)}}\n`;
+  const cut = 31;
+  return [payload.slice(0, cut), payload.slice(cut)]
+    .map((p) => `<script>self.__next_f.push([1,${JSON.stringify(p)}])</script>`)
+    .join("");
+}
+
+const magnetoRow = (over: Record<string, unknown> = {}) => ({
+  id: 1150446,
+  title: "AUXILIAR DE REFRIGERACIÓN\tMEDELLIN",
+  jobSlug: "auxiliar-de-refrigeracion-medellin-1150446",
+  status: "published",
+  cities: ["Medellín", "Envigado"],
+  departments: ["Antioquia"],
+  salary: 2050000,
+  minSalary: 2050000,
+  maxSalary: 2400000,
+  toAgree: false,
+  currencyCode: "COP",
+  description: "$1a",
+  companyName: "Frío SAS",
+  confidential: false,
+  publishDate: "2026-11-24T17:51:31.711Z",
+  contractOrder: { id: 2, name: "Por obra o labor", order: 2 },
+  isRemote: false,
+  experienceMonthsNumber: 6,
+  educationLevel: [{ id: 1, name: "Técnico", order: 2 }],
+  ...over,
+});
+
+test("Magneto: lee los avisos del payload de Next.js, con la descripción aparte", () => {
+  // Texto con caracteres de varios bytes: el largo de la fila T va en bytes UTF-8.
+  const html = magnetoHtml(
+    [
+      magnetoRow(),
+      magnetoRow({ id: 2, jobSlug: "aprendiz-2", title: "Aprendiz SST", description: "$$5 de propina", confidential: true, companyName: "Confidencial", toAgree: true, contractOrder: { name: "Contrato de aprendizaje" }, cities: ["Bogotá, D.C.", "Soacha"], departments: ["Bogotá D.C.", "Cundinamarca"], experienceMonthsNumber: 0, isRemote: true }),
+    ],
+    { "1a": "<p>Técnico en refrigeración – mínimo 6 meses 📌</p><ul><li>Salario: $2.050.000</li></ul>" },
+  );
+  const [a, b] = magnetoPage(html).map(magnetoJob);
+  assert.equal(a!.id, "magneto:1150446");
+  assert.equal(a!.url, "https://www.magneto365.com/co/empleos/auxiliar-de-refrigeracion-medellin-1150446");
+  assert.deepEqual([a!.title, a!.company, a!.location, a!.region], ["AUXILIAR DE REFRIGERACIÓN MEDELLIN", "Frío SAS", "Medellín, Envigado, Antioquia", "antioquia"]);
+  assert.equal(a!.salary, 2400000);
+  assert.equal(a!.description, "Sueldo: $2.050.000 a $2.400.000.\n\nExperiencia: 6 meses.\n\nEstudios: Técnico.\n\nTécnico en refrigeración – mínimo 6 meses 📌\nSalario: $2.050.000");
+  assert.equal(a!.published_at, "2026-11-24T17:51:31.711Z");
+  // Confidencial, a convenir, contrato de aprendizaje (la práctica en Colombia) y remoto o híbrido.
+  assert.deepEqual([b!.company, b!.salary, b!.location, b!.region, b!.modality], [null, null, "Bogotá, D.C., Soacha", "bogota", null]);
+  assert.equal(jobKind(b!.job_type, b!.title), "practica");
+  assert.equal(b!.description, "Modalidad: remoto o híbrido.\n\nSin experiencia.\n\nEstudios: Técnico.\n\n$5 de propina");
+  assert.equal(magnetoJob({ id: 3, title: "Sin slug" }), null);
+  assert.deepEqual(magnetoPage("<html>sin payload</html>"), []);
+});
+
+test("Magneto: pide solo la paginación que permite su robots.txt y para en la primera página sin nada nuevo", async () => {
+  const pages: Record<string, string> = {
+    1: magnetoHtml([magnetoRow({ id: 30, jobSlug: "a-30" }), magnetoRow({ id: 20, jobSlug: "a-20" })], { "1a": "<p>Texto</p>" }),
+    2: magnetoHtml([magnetoRow({ id: 10, jobSlug: "a-10" })], { "1a": "<p>Texto</p>" }),
+  };
+  const urls: string[] = [];
+  const get = async (url: string) => (urls.push(url), pages[/paginator\[page\]=(\d+)/.exec(url)![1]!]!);
+  const res = await magneto(get)({ maxPages: 25, isKnown: (id) => id === "magneto:10" });
+  assert.deepEqual(res.jobs.map((j) => j.id), ["magneto:30", "magneto:20"]);
+  assert.deepEqual(urls, [
+    "https://www.magneto365.com/co/trabajos/buscar?paginator[page]=1",
+    "https://www.magneto365.com/co/trabajos/buscar?paginator[page]=2",
+  ]);
+  // Una primera página sin avisos es un cambio en la página: la fuente queda con error.
+  await assert.rejects(magneto(async () => "<html></html>")({ maxPages: 1, isKnown: () => false }), /no trae avisos/);
+});
+
+const ctItem = (id: string, title = "VENDEDOR / BODEGUERO CON LICENCIA CLASE&#8230;") => `<div class="job-item with-thumb destacado no-hover ">
+    <div class="col-sm-12 px-0" onclick="window.location.href='https://www.chiletrabajos.cl/trabajo/aviso-${id}';">
+        <h2 class="title overflow-hidden">
+            <a href="https://www.chiletrabajos.cl/trabajo/aviso-${id}" class="font-weight-bold">${title}</a>
+        </h2>
+        <h3 class="meta">Construtubos, <a href="https://www.chiletrabajos.cl/ciudad/santiago.html">Santiago</a></h3>
+    </div></div>`;
+
+const ctListing = (total: number, ids: string[]) =>
+  `<h2 class="">Se han encontrado ${total} trabajos </h2>${ids.map((id) => ctItem(id)).join("")}`;
+
+const ctDetail = (fields: Record<string, unknown>) => `<script type="application/ld+json">{"@type":"BreadcrumbList"}</script>
+  <script type='application/ld+json'>${JSON.stringify({ "@context": "https://schema.org/", "@type": "JobPosting", ...fields })}</script>`;
+
+const ctPosting = {
+  baseSalary: { "@type": "MonetaryAmount", currency: "CLP", value: { "@type": "QuantitativeValue", Value: "650000", unitText: "MONTH" } },
+  datePosted: "2026-11-24 09:39:24",
+  hiringOrganization: { "@type": "Organization", name: "CONSTRUTUBOS" },
+  industry: "Ventas / Comercial",
+  jobLocation: { address: { addressLocality: "Santiago", addressRegion: "RM", addressCountry: "CL" } },
+  employmentType: "FULL_TIME",
+  title: "VENDEDOR / BODEGUERO CON LICENCIA CLASE B (RUBRO FERRETERÍA)",
+  description: "Descripción del cargo:\r\nAtención en mesón y bodega.\r\n\r\n•\tModalidad: Presencial.\r\n•\tRenta líquida: $650.000.",
+};
+
+test("Chiletrabajos: lee el listado HTML y el JSON-LD del aviso", () => {
+  const { total, items } = chiletrabajosListing(ctListing(638, ["3937582"]) + `<div class="job-item"><p>sin enlace</p></div>`);
+  assert.equal(total, 638);
+  assert.deepEqual(items, [{
+    id: "3937582",
+    url: "https://www.chiletrabajos.cl/trabajo/aviso-3937582",
+    title: "VENDEDOR / BODEGUERO CON LICENCIA CLASE…",
+  }]);
+  assert.equal(chiletrabajosListing("<html>bloqueado</html>").total, null);
+
+  const job = chiletrabajosJob(items[0]!, ctDetail(ctPosting))!;
+  assert.equal(job.id, "chiletrabajos:3937582");
+  assert.equal(job.source, "chiletrabajos");
+  assert.equal(job.country, "CL");
+  // El título completo sale del detalle; el del listado viene cortado.
+  assert.equal(job.title, "VENDEDOR / BODEGUERO CON LICENCIA CLASE B (RUBRO FERRETERÍA)");
+  assert.deepEqual([job.company, job.location, job.region, job.modality], ["CONSTRUTUBOS", "Santiago, Metropolitana", "metropolitana", "presencial"]);
+  assert.equal(job.salary, 650000);
+  assert.equal(jobKind(job.job_type, job.title), "full_time");
+  assert.equal(job.description, "Descripción del cargo:\nAtención en mesón y bodega.\n• Modalidad: Presencial.\n• Renta líquida: $650.000.");
+  assert.equal(job.published_at, "2026-11-24 09:39:24");
+
+  // Empresa anónima, sueldo a convenir (0), región por su código y jornada doble.
+  const other = chiletrabajosJob(items[0]!, ctDetail({
+    ...ctPosting,
+    hiringOrganization: { name: "ANÓNIMO" },
+    baseSalary: { currency: "CLP", value: { Value: 0, unitText: "MONTH" } },
+    jobLocation: { address: { addressLocality: "Concepción", addressRegion: "BI" } },
+    employmentType: "PART_TIME, FULL_TIME",
+  }))!;
+  assert.deepEqual([other.company, other.salary, other.location, other.region], [null, null, "Concepción, Biobío", "biobio"]);
+  assert.equal(jobKind(other.job_type, other.title), "part_time");
+  for (const [code, region] of [["AP", "arica"], ["LI", "ohiggins"], ["NB", "nuble"], ["AR", "araucania"], ["LR", "los-rios"], ["AI", "aysen"]]) {
+    const j = chiletrabajosJob(items[0]!, ctDetail({ ...ctPosting, jobLocation: { address: { addressLocality: "X", addressRegion: code } } }));
+    assert.equal(j?.region, region, code);
+  }
+  assert.equal(chiletrabajosJob(items[0]!, ctDetail({ ...ctPosting, hiringOrganization: { name: "Empresa confidencial" } }))?.company, null);
+  // Las prácticas son una categoría y se publican como FULL_TIME.
+  const practice = chiletrabajosJob(items[0]!, ctDetail({ ...ctPosting, title: "Asistente de TI", industry: "Prácticas profesionales" }))!;
+  assert.equal(jobKind(practice.job_type, practice.title), "practica");
+  // Sin JSON-LD no hay aviso.
+  assert.equal(chiletrabajosJob(items[0]!, "<html>sin datos</html>"), null);
+  // Un salto de línea sin escapar dentro del JSON no lo invalida.
+  const raw = `<script type='application/ld+json'>{"@type":"JobPosting","title":"Bodeguero","description":"Línea 1
+línea 2"}</script>`;
+  assert.equal(chiletrabajosJob(items[0]!, raw)?.title, "Bodeguero");
+});
+
+test("Chiletrabajos: recorre todo el listado de hoy, salta lo conocido y respeta el tope de detalles", async () => {
+  const pages: Record<string, string> = {
+    [listingUrl(1, 1)]: ctListing(35, ["1", "2", "3"]),
+    [listingUrl(1, 2)]: ctListing(35, ["3", "4", "5"]),
+  };
+  const urls: string[] = [];
+  const get = async (url: string) => {
+    urls.push(url);
+    if (url.endsWith("aviso-4")) throw new Error("404");
+    return pages[url] ?? ctDetail({ ...ctPosting, title: `Aviso ${url.split("-").pop()}` });
+  };
+  const at10 = () => new Date("2026-11-24T13:00:00Z"); // 10:00 en Chile
+  const pause = async () => {};
+  const run = await chiletrabajos({ get, now: at10, pause })({ maxPages: 10, isKnown: (id) => id === "chiletrabajos:1" });
+  // El 1 ya se conocía, el 3 se repite en la página 2 y el 4 falló.
+  assert.deepEqual(run.jobs.map((j) => j.id), ["chiletrabajos:2", "chiletrabajos:3", "chiletrabajos:5"]);
+  assert.equal(run.invalid, 1);
+  assert.equal(run.pages, 2);
+  assert.equal(run.note, "hoy: 2 de 2 páginas");
+  assert.equal(urls[0], "https://www.chiletrabajos.cl/encuentra-un-empleo?fecha=1&f=2");
+  assert.ok(urls.includes("https://www.chiletrabajos.cl/encuentra-un-empleo/30?fecha=1&f=2"));
+
+  // Con tope, deja de pedir y lo que falta queda para la próxima corrida.
+  const capped = await chiletrabajos({ get, now: at10, pause, maxDetails: 1 })({ maxPages: 10, isKnown: () => false });
+  assert.deepEqual(capped.jobs.map((j) => j.id), ["chiletrabajos:1"]);
+  assert.equal(capped.pages, 1);
+  assert.match(capped.note!, /tope de 1 detalles/);
+
+  // Antes de las 2 de la mañana se recorre desde ayer.
+  urls.length = 0;
+  const night = await chiletrabajos({ get: async (url) => (urls.push(url), ctListing(0, [])), now: () => new Date("2026-11-24T04:00:00Z"), pause })(
+    { maxPages: 10, isKnown: () => false },
+  );
+  assert.deepEqual(urls, ["https://www.chiletrabajos.cl/encuentra-un-empleo?fecha=2&f=2"]);
+  assert.equal(night.jobs.length, 0);
+
+  // Una página que no es el listado (bloqueo o cambio del HTML) deja la fuente con error.
+  await assert.rejects(
+    chiletrabajos({ get: async () => "<html>Access denied</html>", now: at10, pause })({ maxPages: 10, isKnown: () => false }),
+    /no trae el listado/,
+  );
 });

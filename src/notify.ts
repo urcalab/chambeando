@@ -13,14 +13,17 @@ const MODALITY_LABEL: Record<string, string | null> = { presencial: null, hibrid
 /** El nombre de cada portal, como se muestra. Get on Board pide aparecer como fuente de sus avisos. */
 export const PORTALS: Record<string, string> = {
   computrabajo: "Computrabajo", laborum: "Laborum", bumeran: "Bumeran", multitrabajos: "Multitrabajos",
-  konzerta: "Konzerta", trabajando: "Trabajando", getonboard: "Get on Board",
+  konzerta: "Konzerta", trabajando: "Trabajando", getonboard: "Get on Board", bne: "la Bolsa Nacional de Empleo",
+  magneto: "Magneto", chiletrabajos: "Chiletrabajos",
 };
 
 export function formatJob(j: Job, link: string, n?: number, ago?: string | null): string {
   const place = [j.company, j.location, MODALITY_LABEL[j.modality ?? "presencial"]].filter(Boolean).join(" · ");
   const portal = PORTALS[j.source];
-  // Un sueldo en otra moneda (Get on Board lo da en dólares) viene como primera línea de la descripción.
-  const salary = j.salary ? `Sueldo: ${money(j.salary)}` : (/^Sueldo bruto: [^\n]+/.exec(j.description ?? "")?.[0] ?? null);
+  // Un sueldo que no es una sola cifra en moneda local viene como primera línea de la descripción y manda: un rango (la
+  // BNE y Magneto, que dejan el tope en `salary` para el filtro) o un sueldo en dólares (Get on Board).
+  const line = /^Sueldo(?: bruto)?: [^\n]+/.exec(j.description ?? "")?.[0];
+  const salary = line ?? (j.salary ? `Sueldo: ${money(j.salary)}` : null);
   return [
     `${n ? `${n}. ` : ""}*${j.title}*`,
     place,

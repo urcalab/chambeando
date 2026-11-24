@@ -27,6 +27,20 @@ else if (cmd === "stats") {
   }
   const t = (await fetchJson("https://www.trabajando.cl/api/searchjob?pagina=1&orden=FECHA_PUBLICACION")) as { cantidadRegistros: number };
   out.trabajando = t.cantidadRegistros;
+  const b = (await fetchJson("https://www.bne.gob.cl/api/ofertas/busqueda?page=0&size=1", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+  })) as { totalElements: number };
+  out.bne = b.totalElements;
+  // Chiletrabajos dice cuántos avisos tiene al comienzo de su listado ("Se han encontrado N trabajos").
+  const { parseListing } = await import("./sources/chiletrabajos.ts");
+  const { fetchText: getHtml } = await import("./sources/http.ts");
+  out.chiletrabajos = parseListing(await getHtml("https://www.chiletrabajos.cl/encuentra-un-empleo")).total ?? Number.NaN;
+  // Magneto trae el total de avisos en el payload de su buscador ("cupos" es otra cosa: vacantes por aviso).
+  const { rscPayload } = await import("./sources/magneto.ts");
+  const m = rscPayload(await getHtml("https://www.magneto365.com/co/trabajos/buscar?paginator[page]=1"));
+  out.magneto = Number(/"totalRows":(\d+)/.exec(m)?.[1] ?? Number.NaN);
   // Get on Board no da el total: se cuentan los avisos de su listado de cada país abierto.
   const { getonboard } = await import("./sources/getonboard.ts");
   const { ENABLED_COUNTRIES } = await import("./text.ts");

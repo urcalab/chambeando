@@ -37,6 +37,15 @@ export const config = {
   trabajandoMaxPages: int(env.TRABAJANDO_MAX_PAGES, 20),
   /** Páginas de 120 avisos por país en Get on Board; el listado entero de un país cabe en menos. */
   getonboardMaxPages: int(env.GETONBOARD_MAX_PAGES, 10),
+  /** Páginas de 50 avisos de la Bolsa Nacional de Empleo (Chile) en cada corrida; se para en la primera sin nada nuevo. */
+  bneMaxPages: int(env.BNE_MAX_PAGES, 10),
+  /**
+   * Páginas de 30 avisos de Chiletrabajos en cada corrida. Se recorre entero el listado del día (unas 45 páginas al
+   * final del día; desde ayer, unas 70, antes de las 2 de la mañana), con un tope de 200 detalles.
+   */
+  chiletrabajosMaxPages: int(env.CHILETRABAJOS_MAX_PAGES, 70),
+  /** Páginas de 20 avisos de Magneto (Colombia) en cada corrida; se para en la primera sin nada nuevo. */
+  magnetoMaxPages: int(env.MAGNETO_MAX_PAGES, 25),
   /** Avisos que se evalúan con el modelo por usuario en cada corrida. */
   candidatesPerUser: 8,
   /** Avisos que se mandan como máximo en un mensaje. */
