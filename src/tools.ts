@@ -95,6 +95,21 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
     return keep.map((f) => present(f.job, user.phone));
   }
 
+  /**
+   * El aviso al que se refiere la persona. El agente puede mandar el id interno ("laborum:123") o, como el mensaje
+   * automático solo muestra links, el código del link ("sjrr3muj6z") o el link entero. Solo vale un aviso que se le mandó.
+   */
+  function resolveJobId(phone: string, ref: string): string | null {
+    const sent = db.prepare("SELECT job_id FROM deliveries WHERE phone = ? AND job_id = ? AND status = 'sent'");
+    if (sent.get(phone, ref)) return ref;
+    const token = ref.trim().replace(/\/+$/, "").split("/").pop()!.toLowerCase();
+    if (token.length < 6) return null;
+    const rows = db
+      .prepare("SELECT job_id FROM deliveries WHERE phone = ? AND status = 'sent' AND token LIKE ? LIMIT 2")
+      .all(phone, `${token}%`) as Array<{ job_id: string }>;
+    return rows.length === 1 ? rows[0]!.job_id : null;
+  }
+
   return {
     /** Crea o actualiza el perfil. Los campos que no vienen se conservan. */
     async guardar_preferencias(input: unknown) {
@@ -206,14 +221,13 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
           motivo: z.string().trim().max(300).optional(),
         })
         .parse(input);
+      const jobId = resolveJobId(p.phone, p.aviso_id);
+      if (!jobId) throw new ToolError(404, `No le hemos mandado el aviso ${p.aviso_id} a esta persona.`);
       // Postular implica que le sirvió. Un dato que no viene no borra el que ya estaba.
-      const res = db
-        .prepare(
-          `UPDATE deliveries SET useful = ?, applied = COALESCE(?, applied), feedback = COALESCE(?, feedback)
-           WHERE phone = ? AND job_id = ?`,
-        )
-        .run(p.util || p.postulo ? 1 : 0, p.postulo === undefined ? null : p.postulo ? 1 : 0, p.motivo ?? null, p.phone, p.aviso_id);
-      if (res.changes === 0) throw new ToolError(404, `No le hemos mandado el aviso ${p.aviso_id} a esta persona.`);
+      db.prepare(
+        `UPDATE deliveries SET useful = ?, applied = COALESCE(?, applied), feedback = COALESCE(?, feedback)
+         WHERE phone = ? AND job_id = ?`,
+      ).run(p.util || p.postulo ? 1 : 0, p.postulo === undefined ? null : p.postulo ? 1 : 0, p.motivo ?? null, p.phone, jobId);
       return { registrado: true };
     },
 

@@ -454,6 +454,10 @@ test("feedback: links con token cuentan clics, y la opinión y la postulación l
     assert.equal(recordClick(db, token.slice(0, 7)), `https://x/${saved.avisos[0]!.id}`);
     assert.equal(recordClick(db, token.slice(0, 4)), null);
 
+    // El agente puede mandar el código del link o el link entero en vez del id interno.
+    assert.deepEqual(await tools.registrar_opinion({ phone, aviso_id: token, util: true }), { registrado: true });
+    assert.deepEqual(await tools.registrar_opinion({ phone, aviso_id: link, util: true }), { registrado: true });
+    await assert.rejects(tools.registrar_opinion({ phone, aviso_id: "zzzzzzzz", util: true }), /No le hemos mandado/);
     await tools.registrar_opinion({ phone, aviso_id: saved.avisos[0]!.id, util: true, postulo: true });
     await tools.registrar_opinion({ phone, aviso_id: saved.avisos[1]!.id, util: false, motivo: "pedían inglés" });
     const s = stats(db, 7);
