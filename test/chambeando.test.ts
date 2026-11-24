@@ -14,14 +14,14 @@ import { dedupeKey, ingest, localityOf, sameLocality } from "../src/ingest.ts";
 import type { Embedder } from "../src/embed.ts";
 import { parseVerdicts, type Judge } from "../src/llm.ts";
 import { matchAll, passesFilters } from "../src/match.ts";
-import { notifyAll, type Sender } from "../src/notify.ts";
+import { canMessageNow, formatMessage, notifyAll, type Sender } from "../src/notify.ts";
 import { parseListing, toJob as computrabajoJob } from "../src/sources/computrabajo.ts";
 import { parseJobintDate, toJob as jobintJob } from "../src/sources/jobint.ts";
 import { toJob as trabajandoJob } from "../src/sources/trabajando.ts";
 import type { NewJob } from "../src/sources/types.ts";
 import type { JobKind } from "../src/text.ts";
 import { createTools } from "../src/tools.ts";
-import { countryOfPhone, jobKind, modalityOf, normalizePhone, regionKey, regionOf } from "../src/text.ts";
+import { countryOfPhone, jobKind, localNow, modalityOf, normalizePhone, publishedAgo, regionKey, regionOf } from "../src/text.ts";
 
 test("regionKey reconoce los formatos de los dos portales", () => {
   assert.equal(regionKey("Providencia, Región Metropolitana"), "metropolitana");
@@ -288,10 +288,10 @@ test("flujo completo: registro, match de avisos nuevos, envío, opinión y borra
     sentTexts.push(m.text);
     return { status: 202, mode: "text" };
   };
-  const n1 = await notifyAll(db, open);
+  const n1 = await notifyAll(db, open, { ignoreSchedule: true });
   assert.equal(n1.sent, 1);
   assert.match(sentTexts[0]!, /Contador tributario/);
-  assert.equal((await notifyAll(db, open)).sent, 0);
+  assert.equal((await notifyAll(db, open, { ignoreSchedule: true })).sent, 0);
 
   await tools.registrar_opinion({ phone, aviso_id: "d", util: false, motivo: "piden inglés" });
   await assert.rejects(tools.registrar_opinion({ phone, aviso_id: "zzz", util: true }), /No le hemos mandado/);
@@ -305,9 +305,9 @@ test("flujo completo: registro, match de avisos nuevos, envío, opinión y borra
     calls.push({ template: Boolean(m.template) });
     return m.template ? { status: 202, mode: "template" } : { status: 422, code: "outside_window" };
   };
-  assert.equal((await notifyAll(db, closed)).template, 1);
+  assert.equal((await notifyAll(db, closed, { ignoreSchedule: true })).template, 1);
   assert.deepEqual(calls, [{ template: false }, { template: true }]);
-  assert.equal((await notifyAll(db, closed)).outside_window, 1);
+  assert.equal((await notifyAll(db, closed, { ignoreSchedule: true })).outside_window, 1);
   assert.equal(calls.filter((c) => c.template).length, 1);
   const pending = await tools.avisos_pendientes({ phone });
   assert.deepEqual(pending.avisos.map((a) => a.id), ["g"]);
@@ -530,6 +530,51 @@ test("sin ADMIN_API_KEY la consola queda apagada", async () => {
   } finally {
     server.close();
   }
+});
+
+test("horario de envío: 8 a 19 h locales y 2 horas entre mensajes", () => {
+  // 23-11-2026 en Santiago es UTC-3 (verano).
+  const at = (utc: string) => new Date(utc);
+  assert.equal(localNow("CL", at("2026-11-23T15:00:00Z")).hour, 12);
+  assert.equal(canMessageNow({ country: "CL", last_notified_at: null }, at("2026-11-23T15:00:00Z")), true);
+  assert.equal(canMessageNow({ country: "CL", last_notified_at: null }, at("2026-11-24T00:07:00Z")), false); // 21:07
+  assert.equal(canMessageNow({ country: "CL", last_notified_at: null }, at("2026-11-23T10:30:00Z")), false); // 07:30
+  assert.equal(canMessageNow({ country: "CL", last_notified_at: "2026-11-23T14:00:00Z" }, at("2026-11-23T15:00:00Z")), false);
+  assert.equal(canMessageNow({ country: "CL", last_notified_at: "2026-11-23T12:59:00Z" }, at("2026-11-23T15:00:00Z")), true);
+  // La misma hora UTC es otra hora local en México (UTC-6): 9:00 allá.
+  assert.equal(canMessageNow({ country: "MX", last_notified_at: null }, at("2026-11-23T15:00:00Z")), true);
+  assert.equal(canMessageNow({ country: "MX", last_notified_at: null }, at("2026-11-23T13:30:00Z")), false); // 07:30
+});
+
+test("fecha de publicación legible en el mensaje", () => {
+  const at = new Date("2026-11-23T15:00:00Z");
+  assert.equal(publishedAgo("2026-11-23 09:10", "CL", at), "hoy");
+  assert.equal(publishedAgo("2026-11-22", "CL", at), "ayer");
+  assert.equal(publishedAgo("2026-11-20 18:00", "CL", at), "hace 3 días");
+  assert.equal(publishedAgo("2026-11-02", "CL", at), "el 02-11");
+  assert.equal(publishedAgo(null, "CL", at), null);
+  const job = { id: "a", title: "Diseñador", company: "X", location: "Viña", modality: null, salary: null, url: "https://x", published_at: new Date().toISOString().slice(0, 10), country: "CL" } as any;
+  assert.match(formatMessage([job], "+56911112222"), /Publicado hoy/);
+});
+
+test("al cambiar el perfil se olvida lo aprobado con el anterior, y lo pendiente que ya no calza no sale", async () => {
+  const db = openDb(":memory:");
+  await addJob(db, { id: "stgo", title: "Práctica contador Santiago", region: "metropolitana" });
+  const tools = createTools(db, fakeEmbed, null);
+  const phone = "+56955556666";
+  await tools.guardar_preferencias({ phone, resumen: "contador", regiones: ["Metropolitana"] });
+  // Queda un aviso de Santiago pendiente del perfil viejo...
+  db.prepare("UPDATE deliveries SET status = 'pending' WHERE phone = ?").run(phone);
+  await tools.guardar_preferencias({ phone, regiones: ["Valparaíso"] });
+  const left = db.prepare("SELECT COUNT(*) AS n FROM deliveries WHERE phone = ? AND status = 'pending'").get(phone) as { n: number };
+  assert.equal(left.n, 0);
+  // ...y si uno quedara igual, el envío lo revisa contra el perfil actual.
+  db.prepare("INSERT INTO deliveries (phone, job_id, status, created_at) VALUES (?, 'stgo', 'pending', ?)").run(phone, now());
+  const sent: string[] = [];
+  const r = await notifyAll(db, async (m) => (sent.push(m.text), { status: 202 }), { ignoreSchedule: true });
+  assert.equal(r.sent, 0);
+  assert.deepEqual(sent, []);
+  assert.equal((db.prepare("SELECT status FROM deliveries WHERE job_id = 'stgo'").get() as any).status, "rejected");
 });
 
 test("si el modelo falla, los avisos se reintentan en la próxima corrida", async () => {

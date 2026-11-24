@@ -2,18 +2,21 @@ import { createHash } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { config } from "./config.ts";
 import { now, rowToUser, type Job, type User } from "./db.ts";
+import { passesFilters } from "./match.ts";
+import { localNow, publishedAgo } from "./text.ts";
 import { jobLink, linkToken } from "./feedback.ts";
 
 const money = (n: number) => `$${n.toLocaleString("es-419")}`;
 
 const MODALITY_LABEL: Record<string, string | null> = { presencial: null, hibrido: "híbrido", remoto: "remoto" };
 
-export function formatJob(j: Job, link: string, n?: number): string {
+export function formatJob(j: Job, link: string, n?: number, ago?: string | null): string {
   const place = [j.company, j.location, MODALITY_LABEL[j.modality ?? "presencial"]].filter(Boolean).join(" · ");
   return [
     `${n ? `${n}. ` : ""}*${j.title}*`,
     place,
     j.salary ? `Sueldo: ${money(j.salary)}` : null,
+    ago ? `Publicado ${ago}` : null,
     link,
   ]
     .filter(Boolean)
@@ -24,7 +27,7 @@ export function formatMessage(jobs: Job[], phone: string): string {
   const head = jobs.length === 1 ? "Encontré un aviso nuevo para ti:" : `Encontré ${jobs.length} avisos nuevos para ti:`;
   return [
     head,
-    ...jobs.map((j, i) => formatJob(j, jobLink(phone, j), i + 1)),
+    ...jobs.map((j, i) => formatJob(j, jobLink(phone, j), i + 1, publishedAgo(j.published_at, j.country))),
     "¿Te sirve alguno? Respóndeme con el número, o dime cuál no y por qué, y afino la búsqueda.",
   ].join("\n\n");
 }
@@ -64,8 +67,12 @@ const DAY = 86_400_000;
  * - Ventana cerrada: una plantilla como máximo cada 24 h; los avisos siguen `pending`
  *   hasta que la persona responde y el agente los entrega con `avisos_pendientes`.
  */
-export async function notifyAll(db: DatabaseSync, send: Sender): Promise<Record<SendResult, number> & { errors: string[] }> {
-  const out = { sent: 0, template: 0, outside_window: 0, failed: 0, errors: [] as string[] };
+export async function notifyAll(
+  db: DatabaseSync,
+  send: Sender,
+  opts: { at?: Date; ignoreSchedule?: boolean } = {},
+): Promise<Record<SendResult | "waiting", number> & { errors: string[] }> {
+  const out = { sent: 0, template: 0, outside_window: 0, failed: 0, waiting: 0, errors: [] as string[] };
   const phones = db
     .prepare(
       `SELECT DISTINCT d.phone FROM deliveries d JOIN users u ON u.phone = d.phone
@@ -74,7 +81,15 @@ export async function notifyAll(db: DatabaseSync, send: Sender): Promise<Record<
     .all() as Array<{ phone: string }>;
   for (const { phone } of phones) {
     const user = rowToUser(db.prepare("SELECT * FROM users WHERE phone = ?").get(phone) as any);
-    const jobs = pendingJobs(db, phone, config.maxJobsPerMessage);
+    if (!opts.ignoreSchedule && !canMessageNow(user, opts.at)) {
+      out.waiting++;
+      continue;
+    }
+    // Un aviso aprobado con un perfil anterior puede ya no calzar: se revisa contra el perfil de hoy.
+    const stale = db.prepare("UPDATE deliveries SET status = 'rejected', reason = 'ya no calza con el perfil' WHERE phone = ? AND job_id = ?");
+    const jobs = pendingJobs(db, phone, config.maxJobsPerMessage * 3)
+      .filter((j) => passesFilters(user, j) || (stale.run(phone, j.id), false))
+      .slice(0, config.maxJobsPerMessage);
     if (!jobs.length) continue;
     try {
       const result = await sendTo(db, user, jobs, send);
@@ -85,6 +100,18 @@ export async function notifyAll(db: DatabaseSync, send: Sender): Promise<Record<
     }
   }
   return out;
+}
+
+/**
+ * Si se le puede escribir ahora: dentro del horario de su país (8 a 19 h) y al menos 2 horas después del último
+ * mensaje automático. Lo que no sale ahora queda pendiente para la próxima corrida.
+ */
+export function canMessageNow(user: Pick<User, "country" | "last_notified_at">, at = new Date()): boolean {
+  const { hour } = localNow(user.country, at);
+  const [from, to] = config.sendHours;
+  if (hour < from || hour >= to) return false;
+  const last = user.last_notified_at ? Date.parse(user.last_notified_at) : 0;
+  return at.getTime() - last >= config.minHoursBetweenMessages * 3_600_000;
 }
 
 export function pendingJobs(db: DatabaseSync, phone: string, limit: number): Job[] {
@@ -116,6 +143,7 @@ async function sendTo(db: DatabaseSync, user: User, jobs: Job[], send: Sender): 
   const first = await send({ to: user.phone, text, key });
   if (first.status === 200 || first.status === 202) {
     markSent(db, user.phone, jobs.map((j) => j.id));
+    db.prepare("UPDATE users SET last_notified_at = ? WHERE phone = ?").run(now(), user.phone);
     return "sent";
   }
   if (first.code === "opted_out") {
@@ -141,6 +169,6 @@ async function sendTo(db: DatabaseSync, user: User, jobs: Job[], send: Sender): 
   if (second.status !== 200 && second.status !== 202) {
     throw new Error(`Vatio ${second.status} ${second.code ?? ""}: ${second.message ?? ""}`);
   }
-  db.prepare("UPDATE users SET last_template_at = ? WHERE phone = ?").run(now(), user.phone);
+  db.prepare("UPDATE users SET last_template_at = ?, last_notified_at = ? WHERE phone = ?").run(now(), now(), user.phone);
   return "template";
 }

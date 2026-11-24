@@ -35,7 +35,11 @@ export const config = {
   /** Avisos que se evalúan con el modelo por usuario en cada corrida. */
   candidatesPerUser: 8,
   /** Avisos que se mandan como máximo en un mensaje. */
-  maxJobsPerMessage: 5,
+  maxJobsPerMessage: 3,
+  /** Mínimo entre dos mensajes automáticos a una misma persona. */
+  minHoursBetweenMessages: 2,
+  /** Horario en que se mandan mensajes automáticos, en la hora local del país de la persona: [desde, hasta). */
+  sendHours: [8, 19] as [number, number],
   /** Días que un aviso se conserva y aparece en búsquedas. */
   jobRetentionDays: 45,
 };

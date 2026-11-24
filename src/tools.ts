@@ -7,7 +7,7 @@ import type { Judge } from "./llm.ts";
 import { pastFeedback, rank, userText } from "./match.ts";
 import { jobLink } from "./feedback.ts";
 import { markSent, pendingJobs } from "./notify.ts";
-import { COUNTRIES, ENABLED_COUNTRIES, JOB_KINDS, countryOf, countryOfPhone, normalizePhone, regionOf, type Country, type JobKind, type Modality } from "./text.ts";
+import { COUNTRIES, ENABLED_COUNTRIES, JOB_KINDS, publishedAgo, countryOf, countryOfPhone, normalizePhone, regionOf, type Country, type JobKind, type Modality } from "./text.ts";
 
 const SUPPORTED = `Países disponibles: ${ENABLED_COUNTRIES.map((c) => COUNTRIES[c]).join(", ")}.`;
 
@@ -47,6 +47,7 @@ function present(j: Job, phone: string) {
     jornada: j.job_type,
     sueldo: j.salary,
     publicado: j.published_at,
+    publicado_hace: publishedAgo(j.published_at, j.country),
     portal: j.source,
     url: jobLink(phone, j),
     extracto: j.description.slice(0, 280),
@@ -136,6 +137,12 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
         next.first_job === null ? null : next.first_job ? 1 : 0, JSON.stringify(next.job_kinds), JSON.stringify(next.roles), JSON.stringify(next.regions),
         JSON.stringify(next.modalities), next.min_salary, JSON.stringify(next.exclude), toBlob(vector!), t, t, t,
       );
+      // Lo evaluado con el perfil anterior ya no vale: se olvida, y la próxima corrida vuelve a mirar los avisos
+      // de los últimos 3 días con el perfil nuevo.
+      if (old) {
+        db.prepare("DELETE FROM deliveries WHERE phone = ? AND status IN ('pending', 'rejected')").run(p.phone);
+        db.prepare("UPDATE users SET matched_until = ? WHERE phone = ?").run(new Date(Date.now() - 3 * 86_400_000).toISOString(), p.phone);
+      }
       const user = getUser(db, p.phone)!;
       return {
         guardado: true,

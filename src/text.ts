@@ -135,6 +135,33 @@ export function regionOf(country: Country, location: string | null | undefined):
   return normalize(parts[parts.length - 1] ?? "") || null;
 }
 
+export const COUNTRY_TZ: Record<Country, string> = {
+  AR: "America/Argentina/Buenos_Aires", BO: "America/La_Paz", CL: "America/Santiago", CO: "America/Bogota",
+  CR: "America/Costa_Rica", DO: "America/Santo_Domingo", EC: "America/Guayaquil", SV: "America/El_Salvador",
+  GT: "America/Guatemala", HN: "America/Tegucigalpa", MX: "America/Mexico_City", NI: "America/Managua",
+  PA: "America/Panama", PY: "America/Asuncion", PE: "America/Lima", UY: "America/Montevideo", VE: "America/Caracas",
+};
+
+/** Fecha (YYYY-MM-DD) y hora local de un instante en el país. */
+export function localNow(country: Country, at = new Date()): { date: string; hour: number } {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-CA", { timeZone: COUNTRY_TZ[country], year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", hourCycle: "h23" })
+      .formatToParts(at).map((p) => [p.type, p.value]),
+  );
+  return { date: `${parts.year}-${parts.month}-${parts.day}`, hour: Number(parts.hour) };
+}
+
+/** "hoy", "ayer", "hace 3 días" o "el 12-11", a partir de la fecha en que el portal publicó el aviso. */
+export function publishedAgo(publishedAt: string | null | undefined, country: Country, at = new Date()): string | null {
+  const day = publishedAt?.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!day) return null;
+  const diff = Math.round((Date.parse(`${localNow(country, at).date}T00:00:00Z`) - Date.parse(`${day[0]}T00:00:00Z`)) / 86_400_000);
+  if (diff <= 0) return "hoy";
+  if (diff === 1) return "ayer";
+  if (diff < 7) return `hace ${diff} días`;
+  return `el ${day[3]}-${day[2]}`;
+}
+
 export type Modality = "presencial" | "hibrido" | "remoto";
 
 export function modalityOf(text: string | null | undefined): Modality | null {

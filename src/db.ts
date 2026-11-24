@@ -41,6 +41,7 @@ export type User = {
   active: boolean;
   matched_until: string;
   last_template_at: string | null;
+  last_notified_at: string | null;
 };
 
 const SCHEMA = `
@@ -87,6 +88,7 @@ CREATE TABLE IF NOT EXISTS users (
   active INTEGER NOT NULL DEFAULT 1,
   matched_until TEXT NOT NULL,
   last_template_at TEXT,
+  last_notified_at TEXT,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -155,6 +157,7 @@ const ADDED_COLUMNS: Array<[table: string, column: string, type: string]> = [
   ["users", "studies", "TEXT"],
   ["users", "first_job", "INTEGER"],
   ["users", "job_kinds", "TEXT NOT NULL DEFAULT '[]'"],
+  ["users", "last_notified_at", "TEXT"],
   ["deliveries", "applied", "INTEGER"],
   ["deliveries", "token", "TEXT"],
   ["deliveries", "clicks", "INTEGER NOT NULL DEFAULT 0"],
@@ -199,6 +202,7 @@ export function rowToUser(r: Row): User {
     active: r.active === 1,
     matched_until: r.matched_until as string,
     last_template_at: (r.last_template_at as string | null) ?? null,
+    last_notified_at: (r.last_notified_at as string | null) ?? null,
   };
 }
 
