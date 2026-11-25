@@ -180,6 +180,23 @@ export function modalityOf(text: string | null | undefined): Modality | null {
 }
 
 /** Las modalidades que le sirven a la persona: quien acepta ir a la oficina todos los días también acepta ir algunos. */
+/** Regiones donde vale una modalidad, cuando no le sirve en todas las suyas. El remoto no tiene lugar. */
+export type ModalityRegions = Partial<Record<"presencial" | "hibrido", string[]>>;
+
+/**
+ * Si la modalidad del aviso le sirve en la región del aviso. "Presencial en Talca o híbrido en Santiago" son dos
+ * listas sueltas (regiones y modalidades) que por sí solas aceptan presencial en Santiago: `solo_en` lo cierra.
+ * Lo que vale para presencial vale para híbrido si híbrido no tiene lista propia, porque `acceptedModalities`
+ * lo suma solo cuando no lo pidió.
+ */
+export function modalityRegionOk(user: { modalities: Modality[]; modality_regions: ModalityRegions }, modality: Modality, region: string): boolean {
+  if (modality === "remoto") return true;
+  const own = user.modality_regions[modality];
+  const inherited = modality === "hibrido" && !user.modalities.includes("hibrido") ? user.modality_regions.presencial : undefined;
+  const allowed = own ?? inherited;
+  return !allowed?.length || regionMatches(allowed, region);
+}
+
 export function acceptedModalities(modalities: Modality[]): Modality[] {
   return modalities.includes("presencial") && !modalities.includes("hibrido") ? [...modalities, "hibrido"] : modalities;
 }

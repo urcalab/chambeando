@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import type { Country, Frequency, JobKind, Modality } from "./text.ts";
+import type { Country, Frequency, JobKind, Modality, ModalityRegions } from "./text.ts";
 
 export type Job = {
   id: string;
@@ -36,6 +36,8 @@ export type User = {
   roles: string[];
   regions: string[];
   modalities: Modality[];
+  /** Una modalidad que solo le sirve en algunas de sus regiones: { presencial: ["maule"] }. */
+  modality_regions: ModalityRegions;
   min_salary: number | null;
   exclude: string[];
   active: boolean;
@@ -87,6 +89,7 @@ CREATE TABLE IF NOT EXISTS users (
   roles TEXT NOT NULL DEFAULT '[]',
   regions TEXT NOT NULL DEFAULT '[]',
   modalities TEXT NOT NULL DEFAULT '[]',
+  modality_regions TEXT NOT NULL DEFAULT '{}',
   min_salary INTEGER,
   exclude TEXT NOT NULL DEFAULT '[]',
   embedding BLOB,
@@ -169,6 +172,7 @@ const ADDED_COLUMNS: Array<[table: string, column: string, type: string]> = [
   ["users", "frequency", "TEXT NOT NULL DEFAULT 'apenas'"],
   ["users", "notify_hour", "INTEGER"],
   ["users", "searched_at", "TEXT"],
+  ["users", "modality_regions", "TEXT NOT NULL DEFAULT '{}'"],
   ["deliveries", "applied", "INTEGER"],
   ["deliveries", "token", "TEXT"],
   ["deliveries", "clicks", "INTEGER NOT NULL DEFAULT 0"],
@@ -208,6 +212,7 @@ export function rowToUser(r: Row): User {
     roles: JSON.parse(r.roles as string),
     regions: JSON.parse(r.regions as string),
     modalities: JSON.parse(r.modalities as string),
+    modality_regions: JSON.parse((r.modality_regions as string | null) ?? "{}"),
     min_salary: (r.min_salary as number | null) ?? null,
     exclude: JSON.parse(r.exclude as string),
     active: r.active === 1,

@@ -18,6 +18,7 @@ export function buildPrompt(user: User, past: PastFeedback[], jobs: Job[]): stri
     user.roles.length ? `Cargos: ${user.roles.join(", ")}` : "",
     user.regions.length ? `Regiones: ${user.regions.join(", ")}` : "Regiones: cualquiera",
     user.modalities.length ? `Modalidad: ${acceptedModalities(user.modalities).join(", ")}` : "",
+    ...Object.entries(user.modality_regions).map(([m, r]) => `${m === "hibrido" ? "Híbrido" : "Presencial"} solo en: ${r.join(", ")}`),
     user.min_salary ? `Sueldo mensual mínimo, en moneda local: ${user.min_salary}` : "",
     user.exclude.length ? `No quiere: ${user.exclude.join(", ")}` : "",
   ].filter(Boolean);

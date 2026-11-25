@@ -7,7 +7,7 @@ import type { Judge } from "./llm.ts";
 import { pastFeedback, rank, userText } from "./match.ts";
 import { jobLink } from "./feedback.ts";
 import { PORTALS, markSent, pendingJobs, salaryLine } from "./notify.ts";
-import { COUNTRIES, ENABLED_COUNTRIES, FREQUENCIES, JOB_KINDS, publishedAgo, countryOf, countryOfPhone, normalizePhone, regionOf, type Country, type JobKind, type Modality } from "./text.ts";
+import { COUNTRIES, ENABLED_COUNTRIES, FREQUENCIES, JOB_KINDS, publishedAgo, countryOf, countryOfPhone, normalizePhone, regionOf, type Country, type JobKind, type Modality, type ModalityRegions } from "./text.ts";
 
 const SUPPORTED = `Países disponibles: ${ENABLED_COUNTRIES.map((c) => COUNTRIES[c]).join(", ")}.`;
 
@@ -33,6 +33,9 @@ const Preferences = z.object({
   cargos: z.array(z.string().trim().min(1)).max(10).optional(),
   regiones: z.array(z.string().trim().min(1)).max(10).optional(),
   modalidades: Modalities.optional(),
+  solo_en: z
+    .object({ presencial: z.array(z.string().trim().min(1)).max(10).optional(), hibrido: z.array(z.string().trim().min(1)).max(10).optional() })
+    .optional(),
   sueldo_minimo: z.number().int().nonnegative().nullable().optional(),
   excluir: z.array(z.string().trim().min(1)).max(20).optional(),
 });
@@ -146,24 +149,34 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
         // Si cambió de país, las regiones anteriores ya no aplican.
         regions: p.regiones ? regions(p.regiones) : old && old.country === country ? old.regions : [],
         modalities: (p.modalidades ?? old?.modalities ?? []) as Modality[],
+        // Una lista vacía quita la restricción de esa modalidad; si no viene, se conserva.
+        modality_regions: p.solo_en
+          ? (Object.fromEntries(
+              Object.entries(p.solo_en)
+                .map(([m, list]) => [m, regions(list ?? [])] as const)
+                .filter(([, list]) => list.length),
+            ) as ModalityRegions)
+          : old && old.country === country ? old.modality_regions : {},
         min_salary: p.sueldo_minimo !== undefined ? p.sueldo_minimo : (old?.min_salary ?? null),
         exclude: p.excluir ?? old?.exclude ?? [],
       };
+      // Una región de `solo_en` también es de las suyas: si no, el filtro de región la descartaría antes.
+      next.regions = [...new Set([...next.regions, ...Object.values(next.modality_regions).flat()])];
       const [vector] = await embed([userText(next)], "query");
       const t = now();
       db.prepare(
-        `INSERT INTO users (phone, country, name, summary, studies, first_job, job_kinds, roles, regions, modalities, min_salary, exclude, embedding,
-                            active, matched_until, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+        `INSERT INTO users (phone, country, name, summary, studies, first_job, job_kinds, roles, regions, modalities, modality_regions, min_salary,
+                            exclude, embedding, active, matched_until, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
          ON CONFLICT (phone) DO UPDATE SET
            country = excluded.country, name = excluded.name, summary = excluded.summary, studies = excluded.studies,
            first_job = excluded.first_job, job_kinds = excluded.job_kinds, roles = excluded.roles, regions = excluded.regions,
-           modalities = excluded.modalities, min_salary = excluded.min_salary, exclude = excluded.exclude,
+           modalities = excluded.modalities, modality_regions = excluded.modality_regions, min_salary = excluded.min_salary, exclude = excluded.exclude,
            embedding = excluded.embedding, active = 1, updated_at = excluded.updated_at`,
       ).run(
         p.phone, country, next.name, next.summary, next.studies,
         next.first_job === null ? null : next.first_job ? 1 : 0, JSON.stringify(next.job_kinds), JSON.stringify(next.roles), JSON.stringify(next.regions),
-        JSON.stringify(next.modalities), next.min_salary, JSON.stringify(next.exclude), toBlob(vector!), t, t, t,
+        JSON.stringify(next.modalities), JSON.stringify(next.modality_regions), next.min_salary, JSON.stringify(next.exclude), toBlob(vector!), t, t, t,
       );
       // Lo evaluado con el perfil anterior ya no vale: se olvida, y la próxima corrida vuelve a mirar los avisos
       // de los últimos 3 días con el perfil nuevo.
@@ -179,7 +192,7 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
         preferencias: {
           pais: COUNTRIES[user.country], resumen: user.summary, estudios: user.studies,
           primer_trabajo: user.first_job, tipos: user.job_kinds, cargos: user.roles, regiones: user.regions,
-          modalidades: user.modalities, sueldo_minimo: user.min_salary, excluir: user.exclude,
+          modalidades: user.modalities, solo_en: user.modality_regions, sueldo_minimo: user.min_salary, excluir: user.exclude,
         },
         avisos: await searchAndMark(user, vector!),
       };
@@ -195,7 +208,7 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
         preferencias: {
           pais: COUNTRIES[user.country], nombre: user.name, resumen: user.summary, estudios: user.studies,
           primer_trabajo: user.first_job, tipos: user.job_kinds, cargos: user.roles, regiones: user.regions,
-          modalidades: user.modalities, sueldo_minimo: user.min_salary, excluir: user.exclude,
+          modalidades: user.modalities, solo_en: user.modality_regions, sueldo_minimo: user.min_salary, excluir: user.exclude,
         },
         avisos_automaticos: user.active ? `activos: ${frequencyLabel(user)}` : "en pausa",
         avisos_enviados: count("sent"),

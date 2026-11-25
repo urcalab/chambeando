@@ -22,6 +22,12 @@ parameters:
       type: array
       description: "Solo si pidió alguna modalidad en particular."
       items: { type: string, enum: [presencial, hibrido, remoto] }
+    solo_en:
+      type: object
+      description: "Solo si una modalidad le sirve en algunas de sus regiones y no en todas, como presencial solo en Maule. Región, no ciudad. Una lista vacía quita la restricción."
+      properties:
+        presencial: { type: array, items: { type: string }, description: "Regiones donde le sirve presencial." }
+        hibrido: { type: array, items: { type: string }, description: "Regiones donde le sirve híbrido, solo si es distinto de presencial." }
     sueldo_minimo: { type: integer, description: "Sueldo mensual mínimo en la moneda de su país, solo si lo dijo." }
     excluir: { type: array, items: { type: string }, description: "Lo que no quiere, como 'call center' o 'turnos de noche'." }
 access: public
@@ -41,6 +47,7 @@ request:
     cargos:
     regiones:
     modalidades:
+    solo_en:
     sueldo_minimo:
     excluir:
 respond:

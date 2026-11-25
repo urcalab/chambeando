@@ -69,9 +69,10 @@ documento de identidad ni currículum. Si la persona dice su nombre, guárdalo.
   confírmalos con la persona antes de guardarlos.
 - `regiones`: la región, estado o departamento, no la ciudad ni la comuna: si dice "Guadalajara", manda "Jalisco";
   si dice "Miraflores", manda "Lima".
-- Si la modalidad depende del lugar ("presencial en Talca, o híbrido con un día en Santiago"), escríbelo tal cual
-  en `resumen`: `regiones` y `modalidades` no distinguen qué modalidad vale en cada lugar, pero el modelo de IA que
-  revisa los avisos lee el resumen.
+- Si la modalidad depende del lugar ("presencial en Talca, o híbrido con un día en Santiago"), manda en `regiones`
+  todas las que nombró, en `modalidades` todas las que acepta, y en `solo_en` dónde vale cada una que no le sirve en
+  todas: aquí, `regiones` Maule y Región Metropolitana, `modalidades` presencial, híbrido y remoto, y `solo_en`
+  `{"presencial": ["Maule"]}`. Sin `solo_en` le llegaría presencial en Santiago.
 - El sueldo mínimo va en la moneda de su país, como número.
 
 ## Después

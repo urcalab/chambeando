@@ -25,7 +25,7 @@ import { bne, salaryOf, toJob as bneJob } from "../src/sources/bne.ts";
 import { magneto, parsePage as magnetoPage, toJob as magnetoJob } from "../src/sources/magneto.ts";
 import { chiletrabajos, listingUrl, parseListing as chiletrabajosListing, toJob as chiletrabajosJob } from "../src/sources/chiletrabajos.ts";
 import type { NewJob } from "../src/sources/types.ts";
-import type { JobKind } from "../src/text.ts";
+import type { JobKind, Modality } from "../src/text.ts";
 import { createTools } from "../src/tools.ts";
 import { countryOfPhone, jobKind, localNow, modalityOf, normalizePhone, publishedAgo, regionKey, regionOf } from "../src/text.ts";
 
@@ -191,7 +191,7 @@ test("Computrabajo: lee el listado HTML y el JSON-LD del aviso", () => {
 });
 
 test("passesFilters solo descarta por lo que el aviso dice", () => {
-  const user = { regions: ["metropolitana"], modalities: [], min_salary: 900000, exclude: ["call center"], job_kinds: [] as JobKind[] };
+  const user = { regions: ["metropolitana"], modalities: [], modality_regions: {}, min_salary: 900000, exclude: ["call center"], job_kinds: [] as JobKind[] };
   const job = { title: "Contador", region: "metropolitana", modality: null, salary: null, job_type: null as string | null };
   assert.equal(passesFilters(user, job), true);
   assert.equal(passesFilters(user, { ...job, region: "biobio" }), false);
@@ -209,6 +209,41 @@ test("passesFilters solo descarta por lo que el aviso dice", () => {
   assert.equal(passesFilters(intern, { ...job, title: "Práctica contabilidad", job_type: "Full-time" }), true);
   assert.equal(passesFilters(intern, job), true);
   assert.equal(passesFilters({ ...user, job_kinds: ["full_time", "part_time"] }, { ...job, title: "Practicante de finanzas" }), false);
+});
+
+test("solo_en: presencial en Talca, híbrido en Santiago o remoto", async () => {
+  // Felipe pidió eso y le llegó un aviso presencial en Providencia (chambeando, 2026-11-24).
+  const felipe = {
+    regions: ["maule", "metropolitana"], modalities: ["presencial", "hibrido", "remoto"] as Modality[],
+    modality_regions: { presencial: ["maule"] }, min_salary: null, exclude: [], job_kinds: [] as JobKind[],
+  };
+  const job = { title: "Jefe de marketing", region: "metropolitana", modality: "presencial" as Modality | null, salary: null, job_type: null };
+  assert.equal(passesFilters(felipe, job), false);
+  assert.equal(passesFilters(felipe, { ...job, region: "maule" }), true);
+  assert.equal(passesFilters(felipe, { ...job, modality: "hibrido" }), true);
+  assert.equal(passesFilters(felipe, { ...job, region: "biobio", modality: "remoto" }), true);
+  // Sin modalidad informada no se descarta.
+  assert.equal(passesFilters(felipe, { ...job, modality: null }), true);
+  // Si no pidió híbrido aparte, el híbrido sigue al presencial.
+  const onSite = { ...felipe, modalities: ["presencial", "remoto"] as Modality[] };
+  assert.equal(passesFilters(onSite, { ...job, modality: "hibrido" }), false);
+  assert.equal(passesFilters(onSite, { ...job, region: "maule", modality: "hibrido" }), true);
+
+  // Por la herramienta: guarda la región como clave, la suma a sus regiones y se conserva si no viene.
+  const db = openDb(":memory:");
+  const tools = createTools(db, fakeEmbed, null);
+  const phone = "+56977778888";
+  const saved = await tools.guardar_preferencias({
+    phone, resumen: "jefe de marketing", regiones: ["Región Metropolitana"],
+    modalidades: ["presencial", "hibrido", "remoto"], solo_en: { presencial: ["Maule"] },
+  });
+  assert.deepEqual(saved.preferencias.solo_en, { presencial: ["maule"] });
+  assert.deepEqual(saved.preferencias.regiones.sort(), ["maule", "metropolitana"]);
+  await tools.guardar_preferencias({ phone, cargos: ["jefe de marketing"] });
+  assert.deepEqual((await tools.ver_perfil({ phone })).preferencias.solo_en, { presencial: ["maule"] });
+  // Una lista vacía la quita.
+  await tools.guardar_preferencias({ phone, solo_en: { presencial: [] } });
+  assert.deepEqual((await tools.ver_perfil({ phone })).preferencias.solo_en, {});
 });
 
 test("parseVerdicts tolera texto alrededor del JSON y avisos que faltan", () => {
