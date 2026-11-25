@@ -76,6 +76,9 @@ async function ask(prompt: string): Promise<string> {
       model: config.llm.model,
       // Holgado: los modelos que razonan antes de responder gastan parte de este tope en eso.
       max_tokens: 4000,
+      // Sin temperatura fija, los mismos avisos para la misma persona salían aprobados en una corrida y rechazados
+      // en la siguiente. El juez tiene que ser repetible.
+      temperature: 0,
       messages: [{ role: "user", content: prompt }],
     }),
     signal: AbortSignal.timeout(60_000),
