@@ -150,9 +150,10 @@ trabajo, revenderlos ni entrenar modelos con ellos.
 
 Chiletrabajos (`src/sources/chiletrabajos.ts`) no tiene API: se lee el HTML de su listado y el JSON-LD (JobPosting)
 de cada aviso nuevo, por rutas que su robots.txt permite. El listado ordena por día y no por hora (los destacados van
-primero, mezclados), así que cada corrida recorre entero el listado de hoy (antes de las 2 de la mañana, desde ayer) y
-pide el detalle solo de los avisos que no conoce, con un tope de 200 por corrida: la primera vez el resto llega en las
-corridas siguientes. La región sale del código ISO del aviso ("RM", "BI") y las prácticas se reconocen por su
+primero, mezclados), así que cada corrida recorre entero el listado de hoy y pide el detalle solo de los avisos que no
+conoce, con un tope de 200 por corrida: la primera vez el resto llega en las corridas siguientes. Antes de las 2 de la
+mañana, y desde que en UTC ya es mañana (las 21 en Chile, o las 20 en invierno), recorre el listado desde ayer: el
+portal decide qué es "hoy" con la fecha UTC, y a esa hora "hoy" viene vacío. La región sale del código ISO del aviso ("RM", "BI") y las prácticas se reconocen por su
 categoría, porque el portal las publica como jornada completa.
 
 La Bolsa Nacional de Empleo (`src/sources/bne.ts`, Chile) es la bolsa pública del Ministerio del Trabajo; muchos de
@@ -164,9 +165,10 @@ para que el filtro de sueldo mínimo descarte solo lo que ni en su tope alcanza.
 
 Magneto (`src/sources/magneto.ts`, Colombia) es el portal de empleo de Comfama. No tiene API: su buscador es una
 página de Next.js que trae 20 avisos completos por página, del más nuevo al más viejo, dentro del payload de React
-Server Components (`self.__next_f.push`), con la descripción como fila de texto aparte. Su robots.txt prohíbe las URLs
-con `?` salvo la paginación, así que solo se pide `/co/trabajos/buscar?paginator[page]=N`. Si una primera página
-viene sin avisos, la corrida lo informa como error de esa fuente. El contrato de aprendizaje (SENA) se marca como
+Server Components (`self.__next_f.push`), con la descripción como fila de texto aparte. Las páginas van por ruta
+(`/co/trabajos/buscar/pagina-N`), sin `?`, que es lo que su robots.txt prohíbe; el `?paginator[page]=N` de sus links
+el servidor lo ignora y responde siempre la primera. Si una primera página viene sin avisos, la corrida lo informa como
+error de esa fuente, y si una página repite la anterior, lo anota y para. El contrato de aprendizaje (SENA) se marca como
 práctica, y el sueldo, si es rango, va como en la BNE.
 
 Se revisaron y no se incluyen: el Portal del Empleo de México, cuya búsqueda pide un hCaptcha; Empleos Públicos

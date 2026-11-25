@@ -39,7 +39,7 @@ else if (cmd === "stats") {
   out.chiletrabajos = parseListing(await getHtml("https://www.chiletrabajos.cl/encuentra-un-empleo")).total ?? Number.NaN;
   // Magneto trae el total de avisos en el payload de su buscador ("cupos" es otra cosa: vacantes por aviso).
   const { rscPayload } = await import("./sources/magneto.ts");
-  const m = rscPayload(await getHtml("https://www.magneto365.com/co/trabajos/buscar?paginator[page]=1"));
+  const m = rscPayload(await getHtml("https://www.magneto365.com/co/trabajos/buscar"));
   out.magneto = Number(/"totalRows":(\d+)/.exec(m)?.[1] ?? Number.NaN);
   // Get on Board no da el total: se cuentan los avisos de su listado de cada país abierto.
   const { getonboard } = await import("./sources/getonboard.ts");

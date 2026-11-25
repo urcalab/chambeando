@@ -8,11 +8,14 @@ import type { NewJob, Source } from "./types.ts";
  * Magneto (magneto365.com), el portal de empleo de Comfama, en Colombia. No tiene API pública: su buscador es una
  * página de Next.js que trae los avisos dentro del HTML, en el payload de React Server Components
  * (`self.__next_f.push`), con 20 avisos por página del más nuevo al más viejo. Cada aviso trae la descripción
- * completa, así que no se pide su detalle. Su robots.txt prohíbe las URLs con "?" salvo la paginación
- * (`?paginator[page]=N`), que es lo único que se pide.
+ * completa, así que no se pide su detalle. Las páginas van por ruta (`/co/trabajos/buscar/pagina-N`), sin "?", que es
+ * lo que su robots.txt prohíbe. Los links de su paginador dicen `?paginator[page]=N`, pero el servidor lo ignora y
+ * responde siempre la primera página.
  */
 const LISTING = "https://www.magneto365.com/co/trabajos/buscar";
 const PAGE_PAUSE_MS = 1500;
+
+export const listingUrl = (page: number) => (page > 1 ? `${LISTING}/pagina-${page}` : LISTING);
 
 /** El texto del payload RSC que la página va empujando a `self.__next_f`. */
 export function rscPayload(html: string): string {
@@ -164,28 +167,41 @@ export function toJob(raw: unknown): NewJob | null {
 export function magneto(get: (url: string) => Promise<string> = fetchText): Source {
   return async ({ maxPages, isKnown }) => {
     const jobs: NewJob[] = [];
+    const seen = new Set<string>();
     let invalid = 0;
     let pages = 0;
+    let note: string | undefined;
     for (let page = 1; page <= maxPages; page++) {
-      const url = `${LISTING}?paginator[page]=${page}`;
+      const url = listingUrl(page);
       const rows = parsePage(await get(url));
       pages++;
       // El buscador siempre tiene avisos: una página vacía es un cambio en la página o un bloqueo.
       if (page === 1 && rows.length === 0) throw new Error(`${url} no trae avisos (¿cambió la página?)`);
       let fresh = 0;
+      let repeated = 0;
       for (const raw of rows) {
         const job = toJob(raw);
         if (!job) {
           invalid++;
           continue;
         }
+        if (seen.has(job.id)) {
+          repeated++;
+          continue;
+        }
+        seen.add(job.id);
         if (isKnown(job.id)) continue;
         jobs.push(job);
         fresh++;
       }
+      // Una página que solo repite avisos de esta misma corrida es una paginación que dejó de funcionar.
+      if (page > 1 && rows.length > 0 && repeated === rows.length) {
+        note = `la página ${page} repite la anterior (¿cambió la paginación?)`;
+        break;
+      }
       if (fresh === 0 || rows.length === 0) break;
       await sleep(PAGE_PAUSE_MS);
     }
-    return { jobs, pages, invalid };
+    return { jobs, pages, invalid, ...(note ? { note } : {}) };
   };
 }

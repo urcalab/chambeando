@@ -22,7 +22,7 @@ import { availableIn, getonboard, toJob as getonboardJob } from "../src/sources/
 import { parseJobintDate, toJob as jobintJob } from "../src/sources/jobint.ts";
 import { toJob as trabajandoJob } from "../src/sources/trabajando.ts";
 import { bne, salaryOf, toJob as bneJob } from "../src/sources/bne.ts";
-import { magneto, parsePage as magnetoPage, toJob as magnetoJob } from "../src/sources/magneto.ts";
+import { magneto, listingUrl as magnetoUrl, parsePage as magnetoPage, toJob as magnetoJob } from "../src/sources/magneto.ts";
 import { chiletrabajos, listingUrl, parseListing as chiletrabajosListing, toJob as chiletrabajosJob } from "../src/sources/chiletrabajos.ts";
 import type { NewJob } from "../src/sources/types.ts";
 import type { JobKind, Modality } from "../src/text.ts";
@@ -1006,19 +1006,24 @@ test("Magneto: lee los avisos del payload de Next.js, con la descripción aparte
   assert.deepEqual(magnetoPage("<html>sin payload</html>"), []);
 });
 
-test("Magneto: pide solo la paginación que permite su robots.txt y para en la primera página sin nada nuevo", async () => {
+test("Magneto: pagina por ruta, sin \"?\", y para en la primera página sin nada nuevo", async () => {
   const pages: Record<string, string> = {
-    1: magnetoHtml([magnetoRow({ id: 30, jobSlug: "a-30" }), magnetoRow({ id: 20, jobSlug: "a-20" })], { "1a": "<p>Texto</p>" }),
-    2: magnetoHtml([magnetoRow({ id: 10, jobSlug: "a-10" })], { "1a": "<p>Texto</p>" }),
+    [magnetoUrl(1)]: magnetoHtml([magnetoRow({ id: 30, jobSlug: "a-30" }), magnetoRow({ id: 20, jobSlug: "a-20" })], { "1a": "<p>Texto</p>" }),
+    [magnetoUrl(2)]: magnetoHtml([magnetoRow({ id: 10, jobSlug: "a-10" })], { "1a": "<p>Texto</p>" }),
   };
   const urls: string[] = [];
-  const get = async (url: string) => (urls.push(url), pages[/paginator\[page\]=(\d+)/.exec(url)![1]!]!);
+  const get = async (url: string) => (urls.push(url), pages[url]!);
   const res = await magneto(get)({ maxPages: 25, isKnown: (id) => id === "magneto:10" });
   assert.deepEqual(res.jobs.map((j) => j.id), ["magneto:30", "magneto:20"]);
   assert.deepEqual(urls, [
-    "https://www.magneto365.com/co/trabajos/buscar?paginator[page]=1",
-    "https://www.magneto365.com/co/trabajos/buscar?paginator[page]=2",
+    "https://www.magneto365.com/co/trabajos/buscar",
+    "https://www.magneto365.com/co/trabajos/buscar/pagina-2",
   ]);
+  assert.equal(res.note, undefined);
+  // Si cada página repite la primera (como `?paginator[page]=N`, que el servidor ignora), para en la segunda y lo dice.
+  const same = await magneto(async () => pages[magnetoUrl(1)]!)({ maxPages: 25, isKnown: () => false });
+  assert.deepEqual([same.jobs.length, same.pages], [2, 2]);
+  assert.match(same.note!, /la página 2 repite la anterior/);
   // Una primera página sin avisos es un cambio en la página: la fuente queda con error.
   await assert.rejects(magneto(async () => "<html></html>")({ maxPages: 1, isKnown: () => false }), /no trae avisos/);
 });
@@ -1031,8 +1036,9 @@ const ctItem = (id: string, title = "VENDEDOR / BODEGUERO CON LICENCIA CLASE&#82
         <h3 class="meta">Construtubos, <a href="https://www.chiletrabajos.cl/ciudad/santiago.html">Santiago</a></h3>
     </div></div>`;
 
+// Como lo escribe el listado filtrado por fecha; el completo dice "Se han encontrado N trabajos".
 const ctListing = (total: number, ids: string[]) =>
-  `<h2 class="">Se han encontrado ${total} trabajos </h2>${ids.map((id) => ctItem(id)).join("")}`;
+  `<div class="titulo"> <h1 class="font-weight-bold"> Trabajos </h1> </div> <div class="title-lines"> <h2 class="">${total} Trabajos </h2> </div>${ids.map((id) => ctItem(id)).join("")}`;
 
 const ctDetail = (fields: Record<string, unknown>) => `<script type="application/ld+json">{"@type":"BreadcrumbList"}</script>
   <script type='application/ld+json'>${JSON.stringify({ "@context": "https://schema.org/", "@type": "JobPosting", ...fields })}</script>`;
@@ -1057,6 +1063,8 @@ test("Chiletrabajos: lee el listado HTML y el JSON-LD del aviso", () => {
     title: "VENDEDOR / BODEGUERO CON LICENCIA CLASE…",
   }]);
   assert.equal(chiletrabajosListing("<html>bloqueado</html>").total, null);
+  assert.equal(chiletrabajosListing(`<h2 class="">Se han encontrado 34270 trabajos </h2>`).total, 34270);
+  assert.equal(chiletrabajosListing(ctListing(0, [])).total, 0);
 
   const job = chiletrabajosJob(items[0]!, ctDetail(ctPosting))!;
   assert.equal(job.id, "chiletrabajos:3937582");
@@ -1131,6 +1139,18 @@ test("Chiletrabajos: recorre todo el listado de hoy, salta lo conocido y respeta
   );
   assert.deepEqual(urls, ["https://www.chiletrabajos.cl/encuentra-un-empleo?fecha=2&f=2"]);
   assert.equal(night.jobs.length, 0);
+
+  // Desde las 21 de Chile, en UTC ya es mañana y el "hoy" del portal viene vacío: también desde ayer. Un listado con 0
+  // avisos trae igual los destacados.
+  urls.length = 0;
+  const evening = await chiletrabajos({
+    get: async (url) => (urls.push(url), url.includes("encuentra-un-empleo") ? ctListing(0, ["9"]) : ctDetail(ctPosting)),
+    now: () => new Date("2026-11-25T01:42:00Z"), // 22:42 del 24 en Chile
+    pause,
+  })({ maxPages: 10, isKnown: () => false });
+  assert.equal(urls[0], "https://www.chiletrabajos.cl/encuentra-un-empleo?fecha=2&f=2");
+  assert.deepEqual(evening.jobs.map((j) => j.id), ["chiletrabajos:9"]);
+  assert.equal(evening.note, "desde ayer: 1 de 1 páginas");
 
   // Una página que no es el listado (bloqueo o cambio del HTML) deja la fuente con error.
   await assert.rejects(

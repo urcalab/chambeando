@@ -28,9 +28,12 @@ export function listingUrl(since: 1 | 2, page: number): string {
 
 export type Listed = { id: string; url: string; title: string };
 
-/** Cuántos avisos tiene el listado ("Se han encontrado 638 trabajos") y los de esta página. `total` null: no es un listado. */
+/**
+ * Cuántos avisos tiene el listado y los de esta página. El total va en un título: "1069 Trabajos" en el listado
+ * filtrado por fecha, "Se han encontrado 34270 trabajos" en el completo. `total` null: no es un listado.
+ */
 export function parseListing(html: string): { total: number | null; items: Listed[] } {
-  const total = html.match(/Se han encontrado (\d+)/)?.[1];
+  const total = html.match(/<h2[^>]*>\s*(?:Se han encontrado\s+)?(\d+)\s+trabajos\s*<\/h2>/i)?.[1];
   const items: Listed[] = [];
   for (const block of html.split('<div class="job-item').slice(1)) {
     const link = block.match(/<h2 class="title[^"]*">\s*<a href="(https:\/\/www\.chiletrabajos\.cl\/trabajo\/[^"]*?-(\d+))"[^>]*>([\s\S]*?)<\/a>/);
@@ -140,7 +143,10 @@ export function toJob(listed: Listed, detailHtml: string): NewJob | null {
 
 /**
  * Recorre el listado de hoy y trae el detalle de los avisos que no conocemos, hasta `maxDetails` por corrida.
- * En las primeras horas del día recorre desde ayer, para no perder lo publicado después de la última corrida de la noche.
+ * Recorre desde ayer en dos casos:
+ * - Las primeras horas del día, para no perder lo publicado después de la última corrida de la noche.
+ * - Cuando en UTC ya es mañana (desde las 21 en Chile, o las 20 en invierno): el portal decide qué es "hoy" con la
+ *   fecha UTC, y a esa hora "hoy" viene vacío aunque haya avisos de hace un rato.
  */
 export function chiletrabajos({
   get = (url: string) => fetchText(url),
@@ -154,7 +160,9 @@ export function chiletrabajos({
   maxDetails?: number;
 } = {}): Source {
   return async ({ maxPages, isKnown }) => {
-    const since = localNow("CL", now()).hour < 2 ? 2 : 1;
+    const at = now();
+    const chile = localNow("CL", at);
+    const since = chile.hour < 2 || chile.date !== at.toISOString().slice(0, 10) ? 2 : 1;
     const jobs: NewJob[] = [];
     const seen = new Set<string>();
     let invalid = 0;
@@ -167,7 +175,8 @@ export function chiletrabajos({
       const { total, items } = parseListing(await get(url));
       pages++;
       if (total === null) throw new Error(`${url} no trae el listado (¿bloqueo o cambio del HTML?)`);
-      last = Math.ceil(total / PAGE_SIZE);
+      // Con 0 avisos igual viene una página, con los destacados.
+      last = Math.max(1, Math.ceil(total / PAGE_SIZE));
       for (const item of items) {
         const id = `chiletrabajos:${item.id}`;
         if (seen.has(id) || isKnown(id)) continue;
