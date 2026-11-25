@@ -65,15 +65,21 @@ documento de identidad ni currículum. Si la persona dice su nombre, guárdalo.
 - `primer_trabajo`: true si nunca ha trabajado en lo suyo. Trabajos informales o de verano no cuentan como experiencia.
 - `tipos`: `practica` (también pasantía, becario o trainee), `part_time` (medio tiempo, por horas, fines de semana)
   y `full_time`. Si dice "lo que salga", déjalo vacío.
-- `cargos`: los cargos a los que postularía. Si no los sabe, propón dos o tres a partir de lo que estudia y
-  confírmalos con la persona antes de guardarlos.
+- `cargos`: los cargos a los que postularía, hasta 10. Si no los sabe, propón dos o tres a partir de lo que estudia y
+  confírmalos con la persona antes de guardarlos. Son cargos, no lugares: en "secretaria en notarías" el cargo es
+  secretaria, y las notarías van en el `resumen`.
 - `regiones`: la región, estado o departamento, no la ciudad ni la comuna: si dice "Guadalajara", manda "Jalisco";
   si dice "Miraflores", manda "Lima".
+- `modalidades`: las que le sirven; vacío es cualquiera. Mándalo solo si alguna no le sirve ("solo remoto", "nada
+  presencial"). "Me sirve remoto" o "también remoto", cuando además nombró dónde busca, suma y no limita: si no
+  tenía modalidades, no lo mandes; si tenía, manda las que tenía más remoto.
 - Si la modalidad depende del lugar ("presencial en Talca, o híbrido con un día en Santiago"), manda en `regiones`
   todas las que nombró, en `modalidades` todas las que acepta, y en `solo_en` dónde vale cada una que no le sirve en
   todas: aquí, `regiones` Maule y Región Metropolitana, `modalidades` presencial, híbrido y remoto, y `solo_en`
   `{"presencial": ["Maule"]}`. Sin `solo_en` le llegaría presencial en Santiago.
 - El sueldo mínimo va en la moneda de su país, como número.
+- `excluir`: lo que dice que no quiere, en pocas palabras ("atención de público", "call center", "turnos de noche"),
+  además de contarlo en el `resumen`.
 
 ## Después
 - Cada vez que la persona cambie o precise lo que busca ("también me sirve full-time", "ya terminé la carrera",

@@ -11,7 +11,7 @@ import { localEmbedder, type Embedder } from "./embed.ts";
 import { createAdmin, logCall } from "./admin.ts";
 import { recordClick, stats } from "./feedback.ts";
 import { normalizePhone } from "./text.ts";
-import { ToolError, createTools, type ToolHooks } from "./tools.ts";
+import { ToolError, createProfileSaver, createTools, preferencesOf, type ToolHooks } from "./tools.ts";
 
 function authorized(req: IncomingMessage, key: string): boolean {
   const given = Buffer.from(req.headers.authorization ?? "");
@@ -66,6 +66,7 @@ export function createApp(
   hooks: ToolHooks = {},
 ) {
   const tools = createTools(db, embed, judge, hooks);
+  const saveProfile = createProfileSaver(db, embed, hooks);
   const admin = createAdmin(db);
   return createServer(async (req, res) => {
     const started = performance.now();
@@ -108,12 +109,23 @@ export function createApp(
         if (!adminKey) return send(res, 503, { error: "La consola está apagada: falta ADMIN_API_KEY" });
         if (!authorized(req, adminKey)) return send(res, 401, { error: "No autorizado" });
         audit.caller = "admin";
-        if (req.method !== "GET") return send(res, 405, { error: "La consola es de solo lectura" });
+        const userId = path.match(/^\/admin\/users\/([0-9a-f]{16})$/)?.[1];
+        // Lo único que la consola escribe: las preferencias de una persona, con los mismos campos que
+        // guardar_preferencias. No le busca ni le marca avisos; la próxima corrida evalúa con el perfil corregido.
+        if (req.method === "PATCH" && userId) {
+          const phone = admin.phoneOf(userId);
+          if (!phone) return send(res, 404, { error: "No existe" });
+          audit.phone = phone;
+          const body = await readJson(req);
+          if (!body || typeof body !== "object" || Array.isArray(body)) throw new ToolError(400, "El cuerpo tiene que ser un objeto");
+          const { user } = await saveProfile({ ...body, phone });
+          return send(res, 200, { id: userId, preferencias: preferencesOf(user) });
+        }
+        if (req.method !== "GET") return send(res, 405, { error: "La consola solo lee, salvo PATCH /admin/users/:id" });
         const q = url.searchParams;
         if (path === "/admin/overview") return send(res, 200, admin.overview(num(q.get("days"), 7, 90)));
         if (path === "/admin/sources") return send(res, 200, admin.sources());
         if (path === "/admin/users") return send(res, 200, admin.users(num(q.get("limit"), 100, 1000)));
-        const userId = path.match(/^\/admin\/users\/([0-9a-f]{16})$/)?.[1];
         if (userId) {
           const user = admin.user(userId);
           return user ? send(res, 200, user) : send(res, 404, { error: "No existe" });

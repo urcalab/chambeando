@@ -13,14 +13,14 @@ parameters:
       type: array
       description: "Tipo de trabajo que busca. Vacío si le da lo mismo."
       items: { type: string, enum: [practica, part_time, full_time] }
-    cargos: { type: array, items: { type: string }, description: "Cargos a los que postularía, como 'analista contable'." }
+    cargos: { type: array, maxItems: 10, items: { type: string }, description: "Hasta 10 cargos a los que postularía, como 'analista contable'. Cargos, no empresas ni lugares." }
     regiones:
       type: array
       description: "Región, provincia, estado o departamento donde busca, no la ciudad. Vacío si le da lo mismo."
       items: { type: string }
     modalidades:
       type: array
-      description: "Solo si pidió alguna modalidad en particular."
+      description: "Las que le sirven; vacío es cualquiera. Solo si alguna no le sirve. Si además de donde busca le sirve remoto, eso suma: no lo dejes solo en remoto."
       items: { type: string, enum: [presencial, hibrido, remoto] }
     solo_en:
       type: object
@@ -29,7 +29,7 @@ parameters:
         presencial: { type: array, items: { type: string }, description: "Regiones donde le sirve presencial." }
         hibrido: { type: array, items: { type: string }, description: "Regiones donde le sirve híbrido, solo si es distinto de presencial." }
     sueldo_minimo: { type: integer, description: "Sueldo mensual mínimo en la moneda de su país, solo si lo dijo." }
-    excluir: { type: array, items: { type: string }, description: "Lo que no quiere, como 'call center' o 'turnos de noche'." }
+    excluir: { type: array, items: { type: string }, description: "Lo que dice que no quiere, como 'atención de público', 'call center' o 'turnos de noche'." }
 access: public
 request:
   method: POST

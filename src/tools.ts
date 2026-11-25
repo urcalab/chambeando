@@ -80,7 +80,85 @@ function userVector(db: DatabaseSync, phone: string): Float32Array {
 /** `profileSaved` corre después de guardar un perfil, con el anterior (null si es nuevo); no debe demorar la respuesta. */
 export type ToolHooks = { profileSaved?: (old: User | null, user: User) => void };
 
+/** El perfil con los nombres de campo de `guardar_preferencias`, como lo ven el agente y la consola. */
+export function preferencesOf(user: User) {
+  return {
+    pais: COUNTRIES[user.country], nombre: user.name, resumen: user.summary, estudios: user.studies,
+    primer_trabajo: user.first_job, tipos: user.job_kinds, cargos: user.roles, regiones: user.regions,
+    modalidades: user.modalities, solo_en: user.modality_regions, sueldo_minimo: user.min_salary, excluir: user.exclude,
+  };
+}
+
+/**
+ * Crea o actualiza el perfil; los campos que no vienen se conservan. No busca avisos ni marca ninguno como enviado:
+ * eso lo hace `guardar_preferencias`. La consola lo usa para corregir un perfil sin mostrarle nada a la persona.
+ */
+export function createProfileSaver(db: DatabaseSync, embed: Embedder, hooks: ToolHooks = {}) {
+  return async function saveProfile(input: unknown): Promise<{ user: User; vector: Float32Array; isNew: boolean }> {
+    const p = Preferences.parse(input);
+    const old = getUser(db, p.phone);
+    // El país sale del código del número; `pais` lo cambia si la persona busca en otro.
+    const asked = p.pais ? countryOf(p.pais) : null;
+    if (p.pais && !asked) throw new ToolError(422, `Todavía no tenemos avisos de "${p.pais}". ${SUPPORTED}`);
+    const country: Country | null = asked ?? old?.country ?? countryOfPhone(p.phone);
+    if (!country) throw new ToolError(422, `Todavía no tenemos avisos del país de este número. ${SUPPORTED} Si busca en uno de esos, manda \`pais\`.`);
+    const regions = (list: string[]) => [...new Set(list.map((r) => regionOf(country, r)).filter((r): r is string => r !== null))];
+    const summary = p.resumen ?? old?.summary;
+    if (!summary) throw new ToolError(422, "Falta `resumen`: qué trabajo busca la persona, en sus palabras.");
+    const next = {
+      name: p.nombre ?? old?.name ?? null,
+      summary,
+      studies: p.estudios ?? old?.studies ?? null,
+      first_job: p.primer_trabajo ?? old?.first_job ?? null,
+      job_kinds: (p.tipos ?? old?.job_kinds ?? []) as JobKind[],
+      roles: p.cargos ?? old?.roles ?? [],
+      // Si cambió de país, las regiones anteriores ya no aplican.
+      regions: p.regiones ? regions(p.regiones) : old && old.country === country ? old.regions : [],
+      modalities: (p.modalidades ?? old?.modalities ?? []) as Modality[],
+      // Una lista vacía quita la restricción de esa modalidad; si no viene, se conserva.
+      modality_regions: p.solo_en
+        ? (Object.fromEntries(
+            Object.entries(p.solo_en)
+              .map(([m, list]) => [m, regions(list ?? [])] as const)
+              .filter(([, list]) => list.length),
+          ) as ModalityRegions)
+        : old && old.country === country ? old.modality_regions : {},
+      min_salary: p.sueldo_minimo !== undefined ? p.sueldo_minimo : (old?.min_salary ?? null),
+      exclude: p.excluir ?? old?.exclude ?? [],
+    };
+    // Una región de `solo_en` también es de las suyas: si no, el filtro de región la descartaría antes.
+    next.regions = [...new Set([...next.regions, ...Object.values(next.modality_regions).flat()])];
+    const [vector] = await embed([userText(next)], "query");
+    const t = now();
+    db.prepare(
+      `INSERT INTO users (phone, country, name, summary, studies, first_job, job_kinds, roles, regions, modalities, modality_regions, min_salary,
+                          exclude, embedding, active, matched_until, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+       ON CONFLICT (phone) DO UPDATE SET
+         country = excluded.country, name = excluded.name, summary = excluded.summary, studies = excluded.studies,
+         first_job = excluded.first_job, job_kinds = excluded.job_kinds, roles = excluded.roles, regions = excluded.regions,
+         modalities = excluded.modalities, modality_regions = excluded.modality_regions, min_salary = excluded.min_salary, exclude = excluded.exclude,
+         embedding = excluded.embedding, active = 1, updated_at = excluded.updated_at`,
+    ).run(
+      p.phone, country, next.name, next.summary, next.studies,
+      next.first_job === null ? null : next.first_job ? 1 : 0, JSON.stringify(next.job_kinds), JSON.stringify(next.roles), JSON.stringify(next.regions),
+      JSON.stringify(next.modalities), JSON.stringify(next.modality_regions), next.min_salary, JSON.stringify(next.exclude), toBlob(vector!), t, t, t,
+    );
+    // Lo evaluado con el perfil anterior ya no vale: se olvida, y la próxima corrida vuelve a mirar los avisos
+    // de los últimos 3 días con el perfil nuevo.
+    if (old) {
+      db.prepare("DELETE FROM deliveries WHERE phone = ? AND status IN ('pending', 'rejected')").run(p.phone);
+      db.prepare("UPDATE users SET matched_until = ? WHERE phone = ?").run(new Date(Date.now() - 3 * 86_400_000).toISOString(), p.phone);
+    }
+    const user = getUser(db, p.phone)!;
+    hooks.profileSaved?.(old, user);
+    return { user, vector: vector!, isNew: !old };
+  };
+}
+
 export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | null = null, hooks: ToolHooks = {}) {
+  const saveProfile = createProfileSaver(db, embed, hooks);
+
   /**
    * La búsqueda con el perfil: marca como enviados los resultados y los devuelve para que el agente los muestre.
    * El modelo descarta primero los que no calzan con el perfil. Si falla, se entregan los más parecidos sin revisar
@@ -127,75 +205,10 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
   }
 
   return {
-    /** Crea o actualiza el perfil. Los campos que no vienen se conservan. */
+    /** Crea o actualiza el perfil y devuelve los avisos que ya le sirven. Los campos que no vienen se conservan. */
     async guardar_preferencias(input: unknown) {
-      const p = Preferences.parse(input);
-      const old = getUser(db, p.phone);
-      // El país sale del código del número; `pais` lo cambia si la persona busca en otro.
-      const asked = p.pais ? countryOf(p.pais) : null;
-      if (p.pais && !asked) throw new ToolError(422, `Todavía no tenemos avisos de "${p.pais}". ${SUPPORTED}`);
-      const country: Country | null = asked ?? old?.country ?? countryOfPhone(p.phone);
-      if (!country) throw new ToolError(422, `Todavía no tenemos avisos del país de este número. ${SUPPORTED} Si busca en uno de esos, manda \`pais\`.`);
-      const regions = (list: string[]) => [...new Set(list.map((r) => regionOf(country, r)).filter((r): r is string => r !== null))];
-      const summary = p.resumen ?? old?.summary;
-      if (!summary) throw new ToolError(422, "Falta `resumen`: qué trabajo busca la persona, en sus palabras.");
-      const next = {
-        name: p.nombre ?? old?.name ?? null,
-        summary,
-        studies: p.estudios ?? old?.studies ?? null,
-        first_job: p.primer_trabajo ?? old?.first_job ?? null,
-        job_kinds: (p.tipos ?? old?.job_kinds ?? []) as JobKind[],
-        roles: p.cargos ?? old?.roles ?? [],
-        // Si cambió de país, las regiones anteriores ya no aplican.
-        regions: p.regiones ? regions(p.regiones) : old && old.country === country ? old.regions : [],
-        modalities: (p.modalidades ?? old?.modalities ?? []) as Modality[],
-        // Una lista vacía quita la restricción de esa modalidad; si no viene, se conserva.
-        modality_regions: p.solo_en
-          ? (Object.fromEntries(
-              Object.entries(p.solo_en)
-                .map(([m, list]) => [m, regions(list ?? [])] as const)
-                .filter(([, list]) => list.length),
-            ) as ModalityRegions)
-          : old && old.country === country ? old.modality_regions : {},
-        min_salary: p.sueldo_minimo !== undefined ? p.sueldo_minimo : (old?.min_salary ?? null),
-        exclude: p.excluir ?? old?.exclude ?? [],
-      };
-      // Una región de `solo_en` también es de las suyas: si no, el filtro de región la descartaría antes.
-      next.regions = [...new Set([...next.regions, ...Object.values(next.modality_regions).flat()])];
-      const [vector] = await embed([userText(next)], "query");
-      const t = now();
-      db.prepare(
-        `INSERT INTO users (phone, country, name, summary, studies, first_job, job_kinds, roles, regions, modalities, modality_regions, min_salary,
-                            exclude, embedding, active, matched_until, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
-         ON CONFLICT (phone) DO UPDATE SET
-           country = excluded.country, name = excluded.name, summary = excluded.summary, studies = excluded.studies,
-           first_job = excluded.first_job, job_kinds = excluded.job_kinds, roles = excluded.roles, regions = excluded.regions,
-           modalities = excluded.modalities, modality_regions = excluded.modality_regions, min_salary = excluded.min_salary, exclude = excluded.exclude,
-           embedding = excluded.embedding, active = 1, updated_at = excluded.updated_at`,
-      ).run(
-        p.phone, country, next.name, next.summary, next.studies,
-        next.first_job === null ? null : next.first_job ? 1 : 0, JSON.stringify(next.job_kinds), JSON.stringify(next.roles), JSON.stringify(next.regions),
-        JSON.stringify(next.modalities), JSON.stringify(next.modality_regions), next.min_salary, JSON.stringify(next.exclude), toBlob(vector!), t, t, t,
-      );
-      // Lo evaluado con el perfil anterior ya no vale: se olvida, y la próxima corrida vuelve a mirar los avisos
-      // de los últimos 3 días con el perfil nuevo.
-      if (old) {
-        db.prepare("DELETE FROM deliveries WHERE phone = ? AND status IN ('pending', 'rejected')").run(p.phone);
-        db.prepare("UPDATE users SET matched_until = ? WHERE phone = ?").run(new Date(Date.now() - 3 * 86_400_000).toISOString(), p.phone);
-      }
-      const user = getUser(db, p.phone)!;
-      hooks.profileSaved?.(old, user);
-      return {
-        guardado: true,
-        nuevo: !old,
-        preferencias: {
-          pais: COUNTRIES[user.country], resumen: user.summary, estudios: user.studies,
-          primer_trabajo: user.first_job, tipos: user.job_kinds, cargos: user.roles, regiones: user.regions,
-          modalidades: user.modalities, solo_en: user.modality_regions, sueldo_minimo: user.min_salary, excluir: user.exclude,
-        },
-        avisos: await searchAndMark(user, vector!),
-      };
+      const { user, vector, isNew } = await saveProfile(input);
+      return { guardado: true, nuevo: isNew, preferencias: preferencesOf(user), avisos: await searchAndMark(user, vector) };
     },
 
     /** Lo que tenemos guardado de la persona, para mostrárselo. */
@@ -205,11 +218,7 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
       const count = (status: string) =>
         (db.prepare("SELECT COUNT(*) AS n FROM deliveries WHERE phone = ? AND status = ?").get(p.phone, status) as { n: number }).n;
       return {
-        preferencias: {
-          pais: COUNTRIES[user.country], nombre: user.name, resumen: user.summary, estudios: user.studies,
-          primer_trabajo: user.first_job, tipos: user.job_kinds, cargos: user.roles, regiones: user.regions,
-          modalidades: user.modalities, solo_en: user.modality_regions, sueldo_minimo: user.min_salary, excluir: user.exclude,
-        },
+        preferencias: preferencesOf(user),
         avisos_automaticos: user.active ? `activos: ${frequencyLabel(user)}` : "en pausa",
         avisos_enviados: count("sent"),
       };

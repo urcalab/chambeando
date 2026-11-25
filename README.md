@@ -213,8 +213,8 @@ persona postuló. `GET /stats?days=7` (con la clave del backend) muestra el embu
 
 ## Consola de admin y registro forense
 
-`/admin/*` es una API de solo lectura con su propia clave (`ADMIN_API_KEY`), distinta de la que usa Vatio. Sin esa
-clave configurada, responde 503. Los teléfonos nunca salen completos: cada persona se identifica por un hash y se
+`/admin/*` es una API con su propia clave (`ADMIN_API_KEY`), distinta de la que usa Vatio. Lee todo y escribe solo
+las preferencias de una persona, para corregir lo que el agente guardó mal. Sin esa clave configurada, responde 503. Los teléfonos nunca salen completos: cada persona se identifica por un hash y se
 muestra enmascarada (`+56 9 •••• 4110`).
 
 | Ruta | Qué devuelve |
@@ -223,6 +223,7 @@ muestra enmascarada (`+56 9 •••• 4110`).
 | `GET /admin/sources` | Avisos por fuente, nuevos en 24 h, duplicados y resultado de la última corrida |
 | `GET /admin/users?limit=100` | Personas con su perfil y cuántos avisos recibieron, abrieron y calificaron |
 | `GET /admin/users/:id` | Una persona y cada aviso que se evaluó para ella, con el motivo del juez |
+| `PATCH /admin/users/:id` | Corrige sus preferencias, con los campos de `guardar_preferencias` (solo los que cambian). No le busca avisos: la próxima corrida evalúa los de los últimos 3 días con el perfil nuevo |
 | `GET /admin/runs?limit=24` | Corridas horarias: qué trajo cada fuente, el match y los envíos |
 | `GET /admin/log?limit=200&path=&caller=&status=` | Registro de llamadas a la API |
 

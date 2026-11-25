@@ -566,7 +566,7 @@ test("una base de la versión anterior recibe las columnas nuevas al abrirse", (
   for (const c of ["applied", "token", "clicks", "first_click_at"]) assert.ok(cols.includes(c), c);
 });
 
-test("consola de admin: su propia clave, solo lectura, sin teléfonos, y cada llamada queda registrada", async () => {
+test("consola de admin: su propia clave, solo lee y edita preferencias, sin teléfonos, y cada llamada queda registrada", async () => {
   const db = openDb(":memory:");
   await addJob(db, { id: "a", title: "Contador general" });
   const server = createApp(db, fakeEmbed, "clave-backend", null, "clave-admin").listen(0);
@@ -575,7 +575,7 @@ test("consola de admin: su propia clave, solo lectura, sin teléfonos, y cada ll
     fetch(base + path, { ...init, headers: { authorization: `Bearer ${key}`, "content-type": "application/json", ...(init.headers ?? {}) } });
   try {
     const phone = "+56948454110";
-    assert.equal((await call("/tools/guardar_preferencias", "clave-backend", { method: "POST", body: JSON.stringify({ phone, resumen: "contador" }) })).status, 200);
+    assert.equal((await call("/tools/guardar_preferencias", "clave-backend", { method: "POST", body: JSON.stringify({ phone, resumen: "contador", modalidades: ["remoto"] }) })).status, 200);
     // La clave de Vatio no abre la consola, ni la de la consola las herramientas.
     assert.equal((await call("/admin/overview", "clave-backend")).status, 401);
     assert.equal((await call("/tools/ver_perfil", "clave-admin", { method: "POST", body: "{}" })).status, 401);
@@ -589,13 +589,33 @@ test("consola de admin: su propia clave, solo lectura, sin teléfonos, y cada ll
     assert.equal(users[0].id, phoneId(phone));
     const detail = await (await call(`/admin/users/${users[0].id}`, "clave-admin")).json();
     assert.equal(detail.deliveries[0].job_id, "a");
-    assert.ok(!JSON.stringify([overview, users, detail]).includes("48454110"), "un teléfono completo salió de la consola");
+    // Lo único que escribe: las preferencias, con los campos de guardar_preferencias. El teléfono del cuerpo no
+    // cuenta, y no se le buscan ni se le marcan avisos: los evalúa la próxima corrida.
+    await addJob(db, { id: "b", title: "Contador de costos" });
+    const patch = (id: string, body: unknown) => call(`/admin/users/${id}`, "clave-admin", { method: "PATCH", body: JSON.stringify(body) });
+    const patched = await patch(users[0].id, { modalidades: [], excluir: ["atención de público"], phone: "+56911112222" });
+    assert.equal(patched.status, 200);
+    const fixed = await patched.json();
+    assert.deepEqual(fixed.preferencias.modalidades, []);
+    assert.deepEqual(fixed.preferencias.excluir, ["atención de público"]);
+    assert.equal(fixed.preferencias.resumen, "contador");
+    const perfil = await (await call("/tools/ver_perfil", "clave-backend", { method: "POST", body: JSON.stringify({ phone }) })).json();
+    assert.deepEqual(perfil.preferencias.excluir, ["atención de público"]);
+    assert.equal((await (await call("/admin/users", "clave-admin")).json()).length, 1);
+    assert.equal((db.prepare("SELECT COUNT(*) AS n FROM deliveries WHERE status = 'sent'").get() as { n: number }).n, 1);
+    assert.equal((await patch(users[0].id, { cargos: Array.from({ length: 11 }, (_, i) => `cargo ${i}`) })).status, 422);
+    assert.equal((await patch("0000000000000000", { excluir: [] })).status, 404);
+    assert.equal((await call("/admin/overview", "clave-admin", { method: "PATCH", body: "{}" })).status, 405);
+    assert.ok(!JSON.stringify([overview, users, detail, fixed]).includes("48454110"), "un teléfono completo salió de la consola");
 
     const log = await (await call("/admin/log?limit=50", "clave-admin")).json();
     const tool = log.find((l: any) => l.path === "/tools/guardar_preferencias");
     assert.equal(tool.caller, "backend");
     assert.equal(tool.status, 200);
     assert.equal(tool.phone_id, phoneId(phone));
+    const edit = log.find((l: any) => l.method === "PATCH" && l.status === 200);
+    assert.equal(edit.caller, "admin");
+    assert.equal(edit.phone_id, phoneId(phone));
     assert.ok(log.some((l: any) => l.path === "/admin/overview" && l.status === 401 && l.caller === "anon"));
     assert.ok(!JSON.stringify(log).includes("48454110"));
     // El registro no se puede editar.

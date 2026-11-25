@@ -5,7 +5,8 @@ import { now, rowToUser } from "./db.ts";
 import { stats } from "./feedback.ts";
 
 /**
- * Consola de admin: solo lectura, con su propia clave (ADMIN_API_KEY), distinta de la que usa Vatio.
+ * Consola de admin, con su propia clave (ADMIN_API_KEY), distinta de la que usa Vatio. Lee todo y solo escribe una
+ * cosa: las preferencias de una persona (PATCH /admin/users/:id), para corregir lo que el agente guardó mal.
  * Los teléfonos nunca salen completos: se identifican por un hash y se muestran enmascarados.
  */
 
@@ -94,6 +95,11 @@ export function createAdmin(db: DatabaseSync) {
           not_useful: r.not_useful, last_sent_at: r.last_sent_at,
         };
       });
+    },
+
+    /** El teléfono detrás de un id, para editar su perfil. Nunca sale de la consola. */
+    phoneOf(id: string): string | null {
+      return (findUser(id)?.phone as string | undefined) ?? null;
     },
 
     /** Una persona y cada aviso que se evaluó para ella. */
