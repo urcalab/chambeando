@@ -15,7 +15,7 @@ import { newRegions, sources } from "../src/cycle.ts";
 import type { Embedder } from "../src/embed.ts";
 import { parseVerdicts, type Judge } from "../src/llm.ts";
 import { matchAll, passesFilters } from "../src/match.ts";
-import { canMessageNow, formatMessage, notifyAll, type Sender } from "../src/notify.ts";
+import { canMessageNow, formatMessage, notifyAll, salaryLine, type Sender } from "../src/notify.ts";
 import { computrabajo, parseListing, regionsFor, toJob as computrabajoJob } from "../src/sources/computrabajo.ts";
 import { HttpError, retryable, withRetries } from "../src/sources/http.ts";
 import { availableIn, getonboard, toJob as getonboardJob } from "../src/sources/getonboard.ts";
@@ -866,6 +866,9 @@ test("BNE: convierte un aviso, con el rango de sueldo como texto y el tope para 
   assert.match(text, /Sueldo: \$610\.001 a \$760\.000\./);
   assert.doesNotMatch(text, /Sueldo: \$760/);
   assert.match(text, /Publicado hoy en la Bolsa Nacional de Empleo/);
+  // Lo mismo ve el agente en `sueldo`; un sueldo de una sola cifra va igual, como texto.
+  assert.equal(salaryLine(job), "Sueldo: $610.001 a $760.000.");
+  assert.match(salaryLine({ salary: 760000, description: "Funciones: vigilar." })!, /^Sueldo: \$760[.,]000$/);
   // Sin tope no hay cifra, para no descartar un aviso que podría pagar lo pedido.
   assert.deepEqual(salaryOf("Más de $3.000.000"), { salary: null, line: "Sueldo: más de $3.000.000." });
   assert.deepEqual(salaryOf("Menos de $460.000"), { salary: 460000, line: "Sueldo: hasta $460.000." });

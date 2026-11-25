@@ -6,7 +6,7 @@ import type { Embedder } from "./embed.ts";
 import type { Judge } from "./llm.ts";
 import { pastFeedback, rank, userText } from "./match.ts";
 import { jobLink } from "./feedback.ts";
-import { PORTALS, markSent, pendingJobs } from "./notify.ts";
+import { PORTALS, markSent, pendingJobs, salaryLine } from "./notify.ts";
 import { COUNTRIES, ENABLED_COUNTRIES, FREQUENCIES, JOB_KINDS, publishedAgo, countryOf, countryOfPhone, normalizePhone, regionOf, type Country, type JobKind, type Modality } from "./text.ts";
 
 const SUPPORTED = `Países disponibles: ${ENABLED_COUNTRIES.map((c) => COUNTRIES[c]).join(", ")}.`;
@@ -45,7 +45,8 @@ function present(j: Job, phone: string) {
     lugar: j.location,
     modalidad: j.modality,
     jornada: j.job_type,
-    sueldo: j.salary,
+    // Como texto, tal como se muestra: un rango o un sueldo en dólares no caben en una cifra.
+    sueldo: salaryLine(j),
     publicado: j.published_at,
     publicado_hace: publishedAgo(j.published_at, j.country),
     portal: PORTALS[j.source] ?? j.source,
