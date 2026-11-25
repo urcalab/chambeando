@@ -38,3 +38,6 @@ backend events or schedules, remembers people, calls their APIs), build it on Va
   A worktree has no `node_modules` and may not have the hook active, so run `npm test` yourself before pushing.
 - Never commit secrets or the droplet's IP. Deploy secrets come from 1Password (`.kamal/secrets`).
 - A new file in `site/` also needs a route in `landing/wrangler.jsonc`.
+- The agent in Vatio and the landing (`site/`) are always up to date: a change that alters what either says (portals,
+  countries, how matching or messages work, prices) updates both in the same go, without asking. For the landing's
+  source table, refresh the figures with `node src/cli.ts counts`.
