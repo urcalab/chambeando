@@ -276,6 +276,28 @@ async function addJob(db: ReturnType<typeof openDb>, over: Partial<NewJob> & { i
 
 const approveAll: Judge = async (_u, _p, jobs) => jobs.map(() => ({ ok: true, reason: "" }));
 
+test("lo que sale al buscar guarda por qué: el motivo del modelo, o que salió sin revisión", async () => {
+  const db = openDb(":memory:");
+  await addJob(db, { id: "a", title: "Contador general" });
+  const reasonOf = (phone: string) =>
+    (db.prepare("SELECT reason, score FROM deliveries WHERE phone = ? AND job_id = 'a'").get(phone) as { reason: string; score: number | null });
+
+  const judged = createTools(db, fakeEmbed, async (_u, _p, jobs) => jobs.map(() => ({ ok: true, reason: "calza con contador" })));
+  await judged.guardar_preferencias({ phone: "+56911110001", resumen: "busco de contador" });
+  assert.equal(reasonOf("+56911110001").reason, "calza con contador");
+  assert.ok(reasonOf("+56911110001").score !== null);
+
+  const broken = createTools(db, fakeEmbed, async () => {
+    throw new Error("se cayó");
+  });
+  const saved = await broken.guardar_preferencias({ phone: "+56911110002", resumen: "busco de contador" });
+  assert.deepEqual(saved.avisos.map((a) => a.id), ["a"]);
+  assert.equal(reasonOf("+56911110002").reason, "sin revisión: el modelo falló");
+
+  await createTools(db, fakeEmbed, null).guardar_preferencias({ phone: "+56911110003", resumen: "busco de contador" });
+  assert.equal(reasonOf("+56911110003").reason, "sin revisión: no hay modelo");
+});
+
 test("flujo completo: registro, match de avisos nuevos, envío, opinión y borrado", async () => {
   const db = openDb(":memory:");
   await addJob(db, { id: "a", title: "Contador general" });

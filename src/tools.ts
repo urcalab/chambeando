@@ -170,7 +170,9 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
       limit: judge ? config.candidatesPerUser : config.maxJobsPerMessage,
       skipStatuses: ["sent", "rejected"],
     });
-    let keep = found.slice(0, config.maxJobsPerMessage);
+    // Cada aviso que sale guarda por qué: el motivo del modelo, o que salió sin revisión. Sin eso no se puede saber
+    // después si un aviso que no calzaba lo aprobó el modelo o lo dejó pasar el respaldo.
+    let keep = found.slice(0, config.maxJobsPerMessage).map((f) => ({ ...f, reason: judge ? "sin revisión: el modelo falló" : "sin revisión: no hay modelo" }));
     if (judge && found.length) {
       try {
         const verdicts = await judge(user, pastFeedback(db, user.phone), found.map((f) => f.job));
@@ -180,12 +182,17 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
         found.forEach((f, i) => {
           if (!verdicts[i]!.ok) reject.run(user.phone, f.job.id, f.score, verdicts[i]!.reason, now());
         });
-        keep = found.filter((_, i) => verdicts[i]!.ok).slice(0, config.maxJobsPerMessage);
+        keep = found
+          .map((f, i) => ({ ...f, reason: verdicts[i]!.reason }))
+          .filter((_, i) => verdicts[i]!.ok)
+          .slice(0, config.maxJobsPerMessage);
       } catch (e) {
         console.error("revisión del modelo falló en la búsqueda:", (e as Error).message);
       }
     }
     markSent(db, user.phone, keep.map((f) => f.job.id));
+    const why = db.prepare("UPDATE deliveries SET score = ?, reason = ? WHERE phone = ? AND job_id = ?");
+    for (const f of keep) why.run(f.score, f.reason, user.phone, f.job.id);
     return keep.map((f) => present(f.job, user.phone));
   }
 

@@ -36,7 +36,9 @@ export function buildPrompt(user: User, past: PastFeedback[], jobs: Job[]): stri
   return [
     "Eres el filtro de un servicio que avisa por WhatsApp de ofertas de trabajo en Latinoamérica.",
     "Una persona recibe pocos avisos al día, así que solo debe llegarle uno si de verdad postularía:",
-    "el cargo corresponde a su profesión y nivel, y nada de lo que pidió excluir aparece.",
+    "el cargo corresponde a su profesión y nivel, y el trabajo no incluye nada de lo que no quiere.",
+    "Lo que no quiere vale para el cargo y para las funciones del aviso, aunque lo diga con otras palabras y sea solo",
+    "una parte del trabajo: si no quiere atención al público, no sirve un aviso que pide atender clientes, pacientes o usuarios.",
     "Ante la duda, no sirve. Que el aviso no informe sueldo o modalidad no lo descarta.",
     "Si busca su primer trabajo: descarta los avisos que exigen más de un año de experiencia o un cargo de jefatura,",
     "y prefiere los que dicen sin experiencia, práctica, trainee, junior o que capacitan. Que pidan estar estudiando o",
