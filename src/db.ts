@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS users (
   min_salary INTEGER,
   exclude TEXT NOT NULL DEFAULT '[]',
   embedding BLOB,
+  role_embeddings BLOB,
   active INTEGER NOT NULL DEFAULT 1,
   frequency TEXT NOT NULL DEFAULT 'apenas',
   notify_hour INTEGER,
@@ -177,6 +178,8 @@ const ADDED_COLUMNS: Array<[table: string, column: string, type: string]> = [
   ["users", "searched_at", "TEXT"],
   ["users", "modality_regions", "TEXT NOT NULL DEFAULT '{}'"],
   ["users", "last_message_id", "INTEGER"],
+  // Un vector por cargo, uno detrás de otro. NULL: todavía no se calculan (los completa la corrida).
+  ["users", "role_embeddings", "BLOB"],
   ["deliveries", "applied", "INTEGER"],
   ["deliveries", "token", "TEXT"],
   ["deliveries", "clicks", "INTEGER NOT NULL DEFAULT 0"],
@@ -200,6 +203,18 @@ export function toBlob(v: Float32Array): Uint8Array {
 export function fromBlob(b: Uint8Array): Float32Array {
   // Copia: el buffer que entrega SQLite puede no estar alineado a 4 bytes.
   return new Float32Array(b.slice().buffer);
+}
+
+/** Varios vectores de la misma dimensión en un solo blob, uno detrás de otro. */
+export function toBlobs(vs: Float32Array[]): Uint8Array {
+  const all = new Float32Array(vs.reduce((n, v) => n + v.length, 0));
+  vs.forEach((v, i) => all.set(v, i * (vs[0]?.length ?? 0)));
+  return toBlob(all);
+}
+
+export function fromBlobs(b: Uint8Array, dim: number): Float32Array[] {
+  const all = fromBlob(b);
+  return Array.from({ length: Math.floor(all.length / dim) }, (_, i) => all.slice(i * dim, (i + 1) * dim));
 }
 
 type Row = Record<string, unknown>;

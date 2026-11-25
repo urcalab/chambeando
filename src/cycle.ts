@@ -4,7 +4,7 @@ import { now, type User } from "./db.ts";
 import type { Embedder } from "./embed.ts";
 import { ingest, type IngestReport } from "./ingest.ts";
 import { llmJudge } from "./llm.ts";
-import { matchAll } from "./match.ts";
+import { fillRoleVectors, matchAll } from "./match.ts";
 import { notifyAll, vatioSender } from "./notify.ts";
 import { bne } from "./sources/bne.ts";
 import { chiletrabajos } from "./sources/chiletrabajos.ts";
@@ -103,6 +103,7 @@ async function cycle(db: DatabaseSync, embed: Embedder) {
   const run = db.prepare("INSERT INTO ingest_runs (started_at) VALUES (?)").run(now()).lastInsertRowid;
   try {
     const ingested = await ingest(db, embed, sources(db));
+    await fillRoleVectors(db, embed);
     const matched = await matchAll(db, config.llm.apiKey ? llmJudge : null);
     const notified = config.vatio.serverKey
       ? await notifyAll(db, vatioSender)

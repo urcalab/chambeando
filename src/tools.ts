@@ -1,10 +1,10 @@
 import type { DatabaseSync } from "node:sqlite";
 import { z } from "zod";
 import { config } from "./config.ts";
-import { fromBlob, getUser, now, toBlob, type Job, type User } from "./db.ts";
+import { getUser, now, toBlob, toBlobs, type Job, type User } from "./db.ts";
 import type { Embedder } from "./embed.ts";
 import type { Judge } from "./llm.ts";
-import { pastFeedback, rank, userText } from "./match.ts";
+import { pastFeedback, queriesOf, rank, userText } from "./match.ts";
 import { jobLink } from "./feedback.ts";
 import { PORTALS, markSent, pendingJobs, salaryLine } from "./notify.ts";
 import { COUNTRIES, ENABLED_COUNTRIES, FREQUENCIES, JOB_KINDS, publishedAgo, countryOf, countryOfPhone, normalizePhone, regionOf, type Country, type JobKind, type Modality, type ModalityRegions } from "./text.ts";
@@ -72,9 +72,8 @@ function requireUser(db: DatabaseSync, phone: string): User {
   return user;
 }
 
-function userVector(db: DatabaseSync, phone: string): Float32Array {
-  const row = db.prepare("SELECT embedding FROM users WHERE phone = ?").get(phone) as { embedding: Uint8Array };
-  return fromBlob(row.embedding);
+function userQueries(db: DatabaseSync, phone: string): Float32Array[] {
+  return queriesOf(db.prepare("SELECT embedding, role_embeddings FROM users WHERE phone = ?").get(phone) as { embedding: Uint8Array; role_embeddings: Uint8Array | null });
 }
 
 /** `profileSaved` corre después de guardar un perfil, con el anterior (null si es nuevo); no debe demorar la respuesta. */
@@ -94,7 +93,7 @@ export function preferencesOf(user: User) {
  * eso lo hace `guardar_preferencias`. La consola lo usa para corregir un perfil sin mostrarle nada a la persona.
  */
 export function createProfileSaver(db: DatabaseSync, embed: Embedder, hooks: ToolHooks = {}) {
-  return async function saveProfile(input: unknown): Promise<{ user: User; vector: Float32Array; isNew: boolean }> {
+  return async function saveProfile(input: unknown): Promise<{ user: User; queries: Float32Array[]; isNew: boolean }> {
     const p = Preferences.parse(input);
     const old = getUser(db, p.phone);
     // El país sale del código del número; `pais` lo cambia si la persona busca en otro.
@@ -128,21 +127,22 @@ export function createProfileSaver(db: DatabaseSync, embed: Embedder, hooks: Too
     };
     // Una región de `solo_en` también es de las suyas: si no, el filtro de región la descartaría antes.
     next.regions = [...new Set([...next.regions, ...Object.values(next.modality_regions).flat()])];
-    const [vector] = await embed([userText(next)], "query");
+    // El perfil entero y cada cargo por separado: `rank` busca con los cargos, o con el perfil si no hay (ver queriesOf).
+    const [vector, ...roleVectors] = await embed([userText(next), ...next.roles], "query");
     const t = now();
     db.prepare(
       `INSERT INTO users (phone, country, name, summary, studies, first_job, job_kinds, roles, regions, modalities, modality_regions, min_salary,
-                          exclude, embedding, active, matched_until, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
+                          exclude, embedding, role_embeddings, active, matched_until, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?)
        ON CONFLICT (phone) DO UPDATE SET
          country = excluded.country, name = excluded.name, summary = excluded.summary, studies = excluded.studies,
          first_job = excluded.first_job, job_kinds = excluded.job_kinds, roles = excluded.roles, regions = excluded.regions,
          modalities = excluded.modalities, modality_regions = excluded.modality_regions, min_salary = excluded.min_salary, exclude = excluded.exclude,
-         embedding = excluded.embedding, active = 1, updated_at = excluded.updated_at`,
+         embedding = excluded.embedding, role_embeddings = excluded.role_embeddings, active = 1, updated_at = excluded.updated_at`,
     ).run(
       p.phone, country, next.name, next.summary, next.studies,
       next.first_job === null ? null : next.first_job ? 1 : 0, JSON.stringify(next.job_kinds), JSON.stringify(next.roles), JSON.stringify(next.regions),
-      JSON.stringify(next.modalities), JSON.stringify(next.modality_regions), next.min_salary, JSON.stringify(next.exclude), toBlob(vector!), t, t, t,
+      JSON.stringify(next.modalities), JSON.stringify(next.modality_regions), next.min_salary, JSON.stringify(next.exclude), toBlob(vector!), toBlobs(roleVectors), t, t, t,
     );
     // Lo evaluado con el perfil anterior ya no vale: se olvida, y la próxima corrida vuelve a mirar los avisos
     // de los últimos 3 días con el perfil nuevo.
@@ -152,7 +152,7 @@ export function createProfileSaver(db: DatabaseSync, embed: Embedder, hooks: Too
     }
     const user = getUser(db, p.phone)!;
     hooks.profileSaved?.(old, user);
-    return { user, vector: vector!, isNew: !old };
+    return { user, queries: roleVectors.length ? roleVectors : [vector!], isNew: !old };
   };
 }
 
@@ -164,9 +164,9 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
    * El modelo descarta primero los que no calzan con el perfil. Si falla, se entregan los más parecidos sin revisar
    * antes que dejar a la persona sin respuesta.
    */
-  async function searchAndMark(user: User, vector: Float32Array): Promise<ReturnType<typeof present>[]> {
+  async function searchAndMark(user: User, queries: Float32Array[]): Promise<ReturnType<typeof present>[]> {
     db.prepare("UPDATE users SET searched_at = ? WHERE phone = ?").run(now(), user.phone);
-    const found = rank(db, user, vector, {
+    const found = rank(db, user, queries, {
       limit: judge ? config.candidatesPerUser : config.maxJobsPerMessage,
       skipStatuses: ["sent", "rejected"],
     });
@@ -214,8 +214,8 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
   return {
     /** Crea o actualiza el perfil y devuelve los avisos que ya le sirven. Los campos que no vienen se conservan. */
     async guardar_preferencias(input: unknown) {
-      const { user, vector, isNew } = await saveProfile(input);
-      return { guardado: true, nuevo: isNew, preferencias: preferencesOf(user), avisos: await searchAndMark(user, vector) };
+      const { user, queries, isNew } = await saveProfile(input);
+      return { guardado: true, nuevo: isNew, preferencias: preferencesOf(user), avisos: await searchAndMark(user, queries) };
     },
 
     /** Lo que tenemos guardado de la persona, para mostrárselo. */
@@ -240,14 +240,14 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
     async buscar_avisos(input: unknown) {
       const p = z.object({ phone: Phone }).parse(input);
       const user = requireUser(db, p.phone);
-      const vector = userVector(db, p.phone);
+      const queries = userQueries(db, p.phone);
       const hasPending = db.prepare("SELECT 1 FROM deliveries WHERE phone = ? AND status = 'pending' LIMIT 1").get(p.phone);
       const fresh =
         !user.searched_at ||
         hasPending ||
-        rank(db, user, vector, { since: user.searched_at, limit: 1, skipStatuses: ["sent", "rejected"] }).length > 0;
+        rank(db, user, queries, { since: user.searched_at, limit: 1, skipStatuses: ["sent", "rejected"] }).length > 0;
       if (!fresh) return { avisos: [], sin_novedades: true };
-      return { avisos: await searchAndMark(user, vector), sin_novedades: false };
+      return { avisos: await searchAndMark(user, queries), sin_novedades: false };
     },
 
     /** Los avisos que el match dejó listos y todavía no se le mostraron. */

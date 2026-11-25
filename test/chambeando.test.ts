@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { config } from "../src/config.ts";
-import { now, openDb, toBlob } from "../src/db.ts";
+import { fromBlob, now, openDb, toBlob } from "../src/db.ts";
 import { linkToken, recordClick, stats } from "../src/feedback.ts";
 import { maskPhone, phoneId } from "../src/admin.ts";
 import { createApp } from "../src/server.ts";
@@ -14,7 +14,7 @@ import { dedupeKey, ingest, localityOf, sameLocality } from "../src/ingest.ts";
 import { newRegions, sources } from "../src/cycle.ts";
 import type { Embedder } from "../src/embed.ts";
 import { parseVerdicts, type Judge } from "../src/llm.ts";
-import { matchAll, passesFilters } from "../src/match.ts";
+import { fillRoleVectors, matchAll, passesFilters, queriesOf, rank } from "../src/match.ts";
 import { canMessageNow, formatMessage, notifyAll, salaryLine, type Replied, type Sender } from "../src/notify.ts";
 import { computrabajo, parseListing, regionsFor, toJob as computrabajoJob } from "../src/sources/computrabajo.ts";
 import { HttpError, retryable, withRetries } from "../src/sources/http.ts";
@@ -275,6 +275,37 @@ async function addJob(db: ReturnType<typeof openDb>, over: Partial<NewJob> & { i
 }
 
 const approveAll: Judge = async (_u, _p, jobs) => jobs.map(() => ({ ok: true, reason: "" }));
+
+test("se busca con un vector por cargo, y con el del perfil entero solo si no dijo cargos", async () => {
+  const db = openDb(":memory:");
+  await addJob(db, { id: "c", title: "Contador general" });
+  await addJob(db, { id: "v", title: "Vendedor de tienda" });
+  await addJob(db, { id: "e", title: "Enfermera de turno" });
+  const tools = createTools(db, fakeEmbed, null);
+  const phone = "+56911110010";
+  // El resumen nombra los tres rubros: el vector del perfil entero queda a la misma distancia de los tres avisos.
+  await tools.guardar_preferencias({ phone, resumen: "contador, vendedor o enfermera, lo que salga", cargos: ["contador", "vendedor"] });
+  const row = db.prepare("SELECT embedding, role_embeddings FROM users WHERE phone = ?").get(phone) as any;
+  const queries = queriesOf(row);
+  assert.equal(queries.length, 2);
+  const user = (await import("../src/db.ts")).getUser(db, phone)!;
+  // Con un vector por cargo, los dos avisos de sus cargos le ganan al que solo nombra el resumen.
+  assert.deepEqual(rank(db, user, queries, { limit: 2, skipStatuses: [] }).map((s) => s.job.id).sort(), ["c", "v"]);
+  assert.ok(rank(db, user, queries, { limit: 3, skipStatuses: [] })[0]!.score > 0.99);
+  // Con el perfil entero, los tres empatan.
+  const flat = rank(db, user, [fromBlob(row.embedding)], { limit: 3, skipStatuses: [] }).map((s) => s.score);
+  assert.ok(Math.max(...flat) - Math.min(...flat) < 1e-6);
+
+  // Un perfil guardado antes de que existieran los vectores por cargo los recibe en la corrida; uno sin cargos no
+  // tiene nada que calcular y se busca solo con el perfil entero.
+  db.prepare("UPDATE users SET role_embeddings = NULL").run();
+  await tools.guardar_preferencias({ phone: "+56911110011", resumen: "busco de vendedor" });
+  db.prepare("UPDATE users SET role_embeddings = NULL WHERE phone = ?").run("+56911110011");
+  assert.equal(await fillRoleVectors(db, fakeEmbed), 1);
+  assert.equal(queriesOf(db.prepare("SELECT embedding, role_embeddings FROM users WHERE phone = ?").get(phone) as any).length, 2);
+  assert.equal(queriesOf(db.prepare("SELECT embedding, role_embeddings FROM users WHERE phone = ?").get("+56911110011") as any).length, 1);
+  assert.equal(await fillRoleVectors(db, fakeEmbed), 0);
+});
 
 test("lo que sale al buscar guarda por qué: el motivo del modelo, o que salió sin revisión", async () => {
   const db = openDb(":memory:");

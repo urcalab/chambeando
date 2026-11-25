@@ -1,7 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { config } from "./config.ts";
-import { fromBlob, now, rowToUser, type Job, type User } from "./db.ts";
-import { dot } from "./embed.ts";
+import { fromBlob, fromBlobs, now, rowToUser, toBlobs, type Job, type User } from "./db.ts";
+import { dot, type Embedder } from "./embed.ts";
 import type { Judge, PastFeedback } from "./llm.ts";
 import { acceptedModalities, jobKind, modalityRegionOk, normalize, regionMatches } from "./text.ts";
 
@@ -42,11 +42,35 @@ export function passesFilters(
 
 export type Scored = { job: Job; score: number };
 
-/** Los avisos más parecidos a `vector` que pasan los filtros y que la persona todavía no recibió. */
+/**
+ * Con qué se buscan avisos para una persona: un vector por cada uno de sus cargos, o el del perfil entero si no dijo
+ * cargos. Con el del perfil, los cargos de quien busca varias cosas se promediaban, y el resumen (sueldo, lugar,
+ * modalidad, que ya filtran los filtros duros) pesaba más que el trabajo: a una historiadora que buscaba archivo o
+ * administración le salían avisos de desarrollo, que se parecen un poco a todo. Sumar el del perfil a los de los
+ * cargos no lo arregla, porque esos avisos le siguen ganando por parecido con el perfil.
+ */
+export function queriesOf(r: { embedding: Uint8Array; role_embeddings?: Uint8Array | null }): Float32Array[] {
+  const profile = fromBlob(r.embedding);
+  return r.role_embeddings?.length ? fromBlobs(r.role_embeddings, profile.length) : [profile];
+}
+
+/** Calcula los vectores por cargo de quien todavía no los tiene (perfiles guardados antes de que existieran). */
+export async function fillRoleVectors(db: DatabaseSync, embed: Embedder): Promise<number> {
+  // Sin cargos no hay nada que calcular (y SQLite guarda el blob vacío como NULL).
+  const rows = db.prepare("SELECT phone, roles FROM users WHERE role_embeddings IS NULL AND roles != '[]'").all() as Array<{ phone: string; roles: string }>;
+  const save = db.prepare("UPDATE users SET role_embeddings = ? WHERE phone = ?");
+  for (const r of rows) save.run(toBlobs(await embed(JSON.parse(r.roles) as string[], "query")), r.phone);
+  return rows.length;
+}
+
+/**
+ * Los avisos más parecidos a la persona que pasan los filtros y que todavía no recibió. Cada aviso vale lo que su
+ * mejor parecido con `queries` (ver `queriesOf`).
+ */
 export function rank(
   db: DatabaseSync,
   user: User,
-  vector: Float32Array,
+  queries: Float32Array[],
   opts: { since?: string; limit: number; skipStatuses: string[] },
 ): Scored[] {
   const marks = opts.skipStatuses.map(() => "?").join(",");
@@ -62,7 +86,8 @@ export function rank(
   for (const row of rows) {
     if (!passesFilters(user, row)) continue;
     const { embedding, ...job } = row;
-    scored.push({ job, score: dot(vector, fromBlob(embedding)) });
+    const v = fromBlob(embedding);
+    scored.push({ job, score: Math.max(...queries.map((q) => dot(q, v))) });
   }
   scored.sort((a, b) => b.score - a.score);
   // Los portales republican el mismo aviso con otro id: se deja solo el primero de cada uno.
@@ -94,7 +119,7 @@ export function pastFeedback(db: DatabaseSync, phone: string): PastFeedback[] {
  */
 export async function matchAll(db: DatabaseSync, judge: Judge | null): Promise<{ users: number; pending: number; errors: string[] }> {
   const users = (db.prepare("SELECT * FROM users WHERE active = 1 AND embedding IS NOT NULL").all() as any[]).map(
-    (r) => ({ user: rowToUser(r), vector: fromBlob(r.embedding as Uint8Array) }),
+    (r) => ({ user: rowToUser(r), queries: queriesOf(r) }),
   );
   const record = db.prepare(
     `INSERT OR IGNORE INTO deliveries (phone, job_id, score, reason, status, created_at) VALUES (?, ?, ?, ?, ?, ?)`,
@@ -102,9 +127,9 @@ export async function matchAll(db: DatabaseSync, judge: Judge | null): Promise<{
   const advance = db.prepare("UPDATE users SET matched_until = ? WHERE phone = ?");
   let pending = 0;
   const errors: string[] = [];
-  for (const { user, vector } of users) {
+  for (const { user, queries } of users) {
     const startedAt = now();
-    const candidates = rank(db, user, vector, {
+    const candidates = rank(db, user, queries, {
       since: user.matched_until,
       limit: config.candidatesPerUser,
       skipStatuses: ["pending", "sent", "rejected"],

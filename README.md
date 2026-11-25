@@ -42,8 +42,9 @@ flowchart LR
    herramienta de este backend, que le devuelve los avisos que ya le sirven.
 2. **El backend trae avisos.** Cada hora pide los avisos nuevos a cada portal, los normaliza, descarta los
    repetidos y calcula un embedding de cada uno.
-3. **El backend cruza avisos y personas.** Para cada persona: filtros duros, los 8 avisos más parecidos a su
-   perfil y un modelo de lenguaje que decide cuáles valen un mensaje.
+3. **El backend cruza avisos y personas.** Para cada persona: filtros duros, los 8 avisos más parecidos a
+   alguno de sus cargos (cada cargo tiene su propio embedding; sin cargos, se usa el del perfil entero) y un modelo
+   de lenguaje que decide cuáles valen un mensaje.
 4. **Vatio entrega.** El backend le pide a Vatio que escriba a la persona; Vatio lo manda como mensaje libre si la
    ventana de 24 horas está abierta, o como plantilla aprobada por Meta si no.
 5. **La persona responde.** "Ese no, piden inglés", "postulé al segundo": el agente lo registra y el juez lo lee
