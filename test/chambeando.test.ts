@@ -503,7 +503,8 @@ test("feedback: links con token cuentan clics, y la opinión y la postulación l
     assert.deepEqual(await tools.registrar_opinion({ phone, aviso_id: link, util: true }), { registrado: true });
     await assert.rejects(tools.registrar_opinion({ phone, aviso_id: "zzzzzzzz", util: true }), /No le hemos mandado/);
     await tools.registrar_opinion({ phone, aviso_id: saved.avisos[0]!.id, util: true, postulo: true });
-    await tools.registrar_opinion({ phone, aviso_id: saved.avisos[1]!.id, util: false, motivo: "pedían inglés" });
+    // Vatio no manda `util: false` en el body: si no viene, no le sirvió.
+    await tools.registrar_opinion({ phone, aviso_id: saved.avisos[1]!.id, motivo: "pedían inglés" });
     const s = stats(db, 7);
     assert.equal(s.funnel.sent, 2);
     assert.equal(s.funnel.clicked, 1); // un aviso abierto, aunque con varios clics
@@ -701,7 +702,8 @@ test("un perfil que pide una región que nadie pedía la trae en segundo plano",
   await tools.guardar_preferencias({ phone: "+56933334444", resumen: "cajero de supermercado" });
   // Mientras estuvo en pausa nadie pedía Biobío: al reanudar se trae.
   await tools.pausar_avisos({ phone: "+56933334444", pausar: true });
-  await tools.pausar_avisos({ phone: "+56933334444", pausar: false });
+  // Vatio no manda `pausar: false`: si no viene, es reanudar.
+  await tools.pausar_avisos({ phone: "+56933334444" });
   // Sin regiones: todo el país, menos lo que ya se recorre.
   await tools.guardar_preferencias({ phone: "+56955556666", resumen: "bodeguero" });
   assert.deepEqual(calls.slice(0, 5), [["valparaiso"], [], ["biobio"], [], ["biobio"]]);

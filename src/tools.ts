@@ -235,7 +235,9 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
         .object({
           phone: Phone,
           aviso_id: z.string(),
-          util: z.boolean(),
+          // Vatio no manda los `false` en el body, y no llama a la herramienta si falta un parámetro requerido:
+          // si `util` no viene, el agente dijo false.
+          util: z.boolean().default(false),
           postulo: z.boolean().optional(),
           motivo: z.string().trim().max(300).optional(),
         })
@@ -268,7 +270,8 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
 
     /** Pausa o reanuda los avisos automáticos. */
     async pausar_avisos(input: unknown) {
-      const p = z.object({ phone: Phone, pausar: z.boolean() }).parse(input);
+      // Como en registrar_opinion: Vatio no manda `pausar: false`, así que si no viene es reanudar.
+      const p = z.object({ phone: Phone, pausar: z.boolean().default(false) }).parse(input);
       const old = requireUser(db, p.phone);
       // Al reanudar no se mandan de golpe los avisos acumulados durante la pausa.
       db.prepare("UPDATE users SET active = ?, matched_until = ?, updated_at = ? WHERE phone = ?").run(
