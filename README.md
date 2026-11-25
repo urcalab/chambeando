@@ -199,12 +199,11 @@ acepta híbrido. El tipo de trabajo es un filtro duro: se lee de la jornada del 
 título (`jobKind` en `src/text.ts`). A quien busca su primer trabajo, el modelo le descarta los avisos que piden
 más de un año de experiencia.
 
-Cada persona elige cada cuánto le llegan los avisos automáticos con `frecuencia_avisos`, aparte del perfil para no
-volver a cruzar avisos: `apenas` (por defecto: un mensaje al día apenas hay avisos, y otro ese mismo día solo si
-respondió al anterior, que Vatio marca con `replied_at`, y pasaron 2 horas), `diaria` o `semanal` (los lunes), desde
-la hora que diga, de 8 a 18 (por defecto, 9). Todo dentro del horario de envío, de 8 a 19 h en su
-país (`canMessageNow` en `src/notify.ts`). Cada mensaje trae hasta 3 avisos y ofrece los que no caben. Fuera de la
-ventana de 24 horas de WhatsApp sale como máximo una plantilla al día, sea cual sea la frecuencia.
+Los avisos automáticos salen entre las 8 y las 19 h del país de la persona, como mucho un mensaje al día, el mismo
+para todos (`canMessageNow` en `src/notify.ts`). Otro ese mismo día solo si la conversación está tibia: si respondió
+al anterior, que Vatio marca con `replied_at`, sale en la corrida siguiente. Cada mensaje trae hasta 3 avisos y
+ofrece los que no caben. Con la ventana de 24 horas de WhatsApp cerrada va como plantilla, así que sale como mucho
+una al día: para un segundo mensaje tuvo que responder, y eso abre la ventana.
 
 ## Feedback de las recomendaciones
 

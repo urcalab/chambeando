@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import type { Country, Frequency, JobKind, Modality, ModalityRegions } from "./text.ts";
+import type { Country, JobKind, Modality, ModalityRegions } from "./text.ts";
 
 export type Job = {
   id: string;
@@ -41,13 +41,9 @@ export type User = {
   min_salary: number | null;
   exclude: string[];
   active: boolean;
-  /** Cada cuánto quiere los avisos automáticos, y desde qué hora local si es diaria o semanal (null: la de siempre). */
-  frequency: Frequency;
-  notify_hour: number | null;
   matched_until: string;
   /** Cuándo se buscó a pedido por última vez (al guardar el perfil o con buscar_avisos). */
   searched_at: string | null;
-  last_template_at: string | null;
   last_notified_at: string | null;
   /** El id en Vatio del último mensaje automático, para saber si la persona le respondió. */
   last_message_id: number | null;
@@ -97,11 +93,8 @@ CREATE TABLE IF NOT EXISTS users (
   embedding BLOB,
   role_embeddings BLOB,
   active INTEGER NOT NULL DEFAULT 1,
-  frequency TEXT NOT NULL DEFAULT 'apenas',
-  notify_hour INTEGER,
   matched_until TEXT NOT NULL,
   searched_at TEXT,
-  last_template_at TEXT,
   last_notified_at TEXT,
   last_message_id INTEGER,
   created_at TEXT NOT NULL,
@@ -173,8 +166,6 @@ const ADDED_COLUMNS: Array<[table: string, column: string, type: string]> = [
   ["users", "first_job", "INTEGER"],
   ["users", "job_kinds", "TEXT NOT NULL DEFAULT '[]'"],
   ["users", "last_notified_at", "TEXT"],
-  ["users", "frequency", "TEXT NOT NULL DEFAULT 'apenas'"],
-  ["users", "notify_hour", "INTEGER"],
   ["users", "searched_at", "TEXT"],
   ["users", "modality_regions", "TEXT NOT NULL DEFAULT '{}'"],
   ["users", "last_message_id", "INTEGER"],
@@ -186,10 +177,22 @@ const ADDED_COLUMNS: Array<[table: string, column: string, type: string]> = [
   ["deliveries", "first_click_at", "TEXT"],
 ];
 
+/** Columnas que ya no se usan: se borran de las bases que las tenían. */
+const DROPPED_COLUMNS: Array<[table: string, column: string]> = [
+  // Las frecuencias (apenas, diaria, semanal) y su hora, y la plantilla cada 24 h: hoy es un mensaje al día para todos.
+  ["users", "frequency"],
+  ["users", "notify_hour"],
+  ["users", "last_template_at"],
+];
+
 function migrate(db: DatabaseSync): void {
+  const has = (table: string, column: string) =>
+    (db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>).some((c) => c.name === column);
   for (const [table, column, type] of ADDED_COLUMNS) {
-    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
-    if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+    if (!has(table, column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
+  for (const [table, column] of DROPPED_COLUMNS) {
+    if (has(table, column)) db.exec(`ALTER TABLE ${table} DROP COLUMN ${column}`);
   }
   db.exec("CREATE INDEX IF NOT EXISTS deliveries_token ON deliveries(token)");
 }
@@ -235,11 +238,8 @@ export function rowToUser(r: Row): User {
     min_salary: (r.min_salary as number | null) ?? null,
     exclude: JSON.parse(r.exclude as string),
     active: r.active === 1,
-    frequency: (r.frequency as Frequency | null) ?? "apenas",
-    notify_hour: (r.notify_hour as number | null) ?? null,
     matched_until: r.matched_until as string,
     searched_at: (r.searched_at as string | null) ?? null,
-    last_template_at: (r.last_template_at as string | null) ?? null,
     last_notified_at: (r.last_notified_at as string | null) ?? null,
     last_message_id: (r.last_message_id as number | null) ?? null,
   };

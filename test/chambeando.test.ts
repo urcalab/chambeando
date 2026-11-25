@@ -350,7 +350,7 @@ test("flujo completo: registro, match de avisos nuevos, envío, opinión y borra
   const perfil = await tools.ver_perfil({ phone });
   assert.equal(perfil.preferencias.resumen, "busco de contador");
   assert.deepEqual(perfil.preferencias.regiones, ["metropolitana"]);
-  assert.equal(perfil.avisos_automaticos, "activos: apenas aparecen, como mucho un mensaje cada 2 horas");
+  assert.equal(perfil.avisos_automaticos, "activos");
   assert.equal(perfil.avisos_enviados, 1);
   await assert.rejects(tools.ver_perfil({ phone: "+56900000077" }), /todavía no ha dicho/);
 
@@ -393,7 +393,7 @@ test("flujo completo: registro, match de avisos nuevos, envío, opinión y borra
   await tools.registrar_opinion({ phone, aviso_id: "d", util: false, motivo: "piden inglés" });
   await assert.rejects(tools.registrar_opinion({ phone, aviso_id: "zzz", util: true }), /No le hemos mandado/);
 
-  // Ventana cerrada: una sola plantilla por día y el aviso sigue pendiente hasta que la persona responde.
+  // Ventana cerrada: va la plantilla y el aviso sigue pendiente hasta que la persona responde.
   await new Promise((r) => setTimeout(r, 5));
   await addJob(db, { id: "g", title: "Contador de costos" });
   await matchAll(db, approveAll);
@@ -404,8 +404,6 @@ test("flujo completo: registro, match de avisos nuevos, envío, opinión y borra
   };
   assert.equal((await notifyAll(db, closed, { ignoreSchedule: true })).template, 1);
   assert.deepEqual(calls, [{ template: false }, { template: true }]);
-  assert.equal((await notifyAll(db, closed, { ignoreSchedule: true })).outside_window, 1);
-  assert.equal(calls.filter((c) => c.template).length, 1);
   const pending = await tools.avisos_pendientes({ phone });
   assert.deepEqual(pending.avisos.map((a) => a.id), ["g"]);
   assert.deepEqual((await tools.avisos_pendientes({ phone })).avisos, []);
@@ -689,16 +687,15 @@ test("sin ADMIN_API_KEY la consola queda apagada", async () => {
   }
 });
 
-test("horario de envío: 8 a 19 h locales, y otro mensaje el mismo día solo si respondió", () => {
+test("horario de envío: 8 a 19 h locales, un mensaje al día y otro ese día solo si respondió", () => {
   // 23-11-2026 en Santiago es UTC-3 (verano).
   const at = (utc: string) => new Date(utc);
   assert.equal(localNow("CL", at("2026-11-23T15:00:00Z")).hour, 12);
   assert.equal(canMessageNow({ country: "CL", last_notified_at: null }, at("2026-11-23T15:00:00Z")), true);
   assert.equal(canMessageNow({ country: "CL", last_notified_at: null }, at("2026-11-24T00:07:00Z")), false); // 21:07
   assert.equal(canMessageNow({ country: "CL", last_notified_at: null }, at("2026-11-23T10:30:00Z")), false); // 07:30
-  // Ya se le escribió hoy: antes de 2 horas, no; después, solo si respondió (lo revisa notifyAll en Vatio).
-  assert.equal(canMessageNow({ country: "CL", last_notified_at: "2026-11-23T14:00:00Z" }, at("2026-11-23T15:00:00Z")), false);
-  assert.equal(canMessageNow({ country: "CL", last_notified_at: "2026-11-23T12:59:00Z" }, at("2026-11-23T15:00:00Z")), "if_replied");
+  // Ya se le escribió hoy: otro solo si respondió (lo revisa notifyAll en Vatio).
+  assert.equal(canMessageNow({ country: "CL", last_notified_at: "2026-11-23T14:00:00Z" }, at("2026-11-23T15:00:00Z")), "if_replied");
   // El de ayer no cuenta: el primero del día sale sin más.
   assert.equal(canMessageNow({ country: "CL", last_notified_at: "2026-11-22T21:00:00Z" }, at("2026-11-23T11:00:00Z")), true); // 8:00
   // La misma hora UTC es otra hora local en México (UTC-6): 9:00 allá.
@@ -821,28 +818,7 @@ test("un perfil que pide una región que nadie pedía la trae en segundo plano",
   assert.equal(calls[5]!.length, 12);
 });
 
-test("frecuencia: una vez al día o a la semana, desde su hora", () => {
-  // En Santiago es UTC-3; el 24-11-2026 es martes y el 30-11-2026, lunes.
-  const at = (utc: string) => new Date(utc);
-  const daily = { country: "CL" as const, frequency: "diaria" as const, notify_hour: null, last_notified_at: null };
-  assert.equal(canMessageNow(daily, at("2026-11-24T11:30:00Z")), false); // 8:30, antes de las 9
-  assert.equal(canMessageNow(daily, at("2026-11-24T12:00:00Z")), true); // 9:00
-  // Ya se le escribió hoy: hasta mañana, aunque pasen más de 2 horas.
-  assert.equal(canMessageNow({ ...daily, last_notified_at: "2026-11-24T12:00:00Z" }, at("2026-11-24T20:00:00Z")), false);
-  assert.equal(canMessageNow({ ...daily, last_notified_at: "2026-11-24T12:00:00Z" }, at("2026-11-25T12:00:00Z")), true);
-  // A la hora que pidió.
-  assert.equal(canMessageNow({ ...daily, notify_hour: 16 }, at("2026-11-24T18:00:00Z")), false); // 15:00
-  assert.equal(canMessageNow({ ...daily, notify_hour: 16 }, at("2026-11-24T19:00:00Z")), true); // 16:00
-  // Semanal: solo los lunes, una vez.
-  const weekly = { ...daily, frequency: "semanal" as const };
-  assert.equal(canMessageNow(weekly, at("2026-11-24T12:00:00Z")), false);
-  assert.equal(canMessageNow(weekly, at("2026-11-30T12:00:00Z")), true);
-  assert.equal(canMessageNow({ ...weekly, last_notified_at: "2026-11-30T12:00:00Z" }, at("2026-11-30T18:00:00Z")), false);
-  // El horario de envío vale para todas.
-  assert.equal(canMessageNow({ ...daily, notify_hour: 18 }, at("2026-11-24T22:30:00Z")), false); // 19:30
-});
-
-test("apenas: un mensaje automático al día, y otro el mismo día solo si respondió al anterior", async () => {
+test("un mensaje automático al día, y otro el mismo día solo si respondió al anterior", async () => {
   const db = openDb(":memory:");
   const phone = "+56977778888";
   await createTools(db, fakeEmbed, null).guardar_preferencias({ phone, resumen: "contador" });
@@ -864,14 +840,14 @@ test("apenas: un mensaje automático al día, y otro el mismo día solo si respo
   assert.deepEqual(asked, []);
   notifiedAt("2026-11-23T12:00:00Z");
 
-  // Tres horas después hay otro, pero no respondió al de la mañana: espera.
+  // Aparece otro, pero no respondió al de la mañana: espera.
   await pend("b");
-  assert.equal((await run("2026-11-23T15:00:00Z")).waiting, 1);
+  assert.equal((await run("2026-11-23T12:30:00Z")).waiting, 1);
   assert.deepEqual(asked, [100]);
-  // Respondió: la ventana está abierta y sale en la corrida siguiente.
+  // Respondió: la conversación está tibia y sale en la corrida siguiente.
   answered.add(100);
-  assert.equal((await run("2026-11-23T16:00:00Z")).sent, 1);
-  notifiedAt("2026-11-23T16:00:00Z");
+  assert.equal((await run("2026-11-23T13:00:00Z")).sent, 1);
+  notifiedAt("2026-11-23T13:00:00Z");
 
   // A ese no respondió: el siguiente espera hasta mañana, y mañana sale sin preguntar.
   await pend("c");
@@ -893,23 +869,24 @@ test("apenas: un mensaje automático al día, y otro el mismo día solo si respo
   assert.deepEqual(failing.errors, ["Vatio 500"]);
 });
 
-test("frecuencia de los avisos: se guarda sin tocar lo pendiente y se ve en el perfil", async () => {
-  const db = openDb(":memory:");
-  const tools = createTools(db, fakeEmbed, null);
+test("una base de antes pierde las columnas de las frecuencias y conserva lo demás", () => {
+  const path = join(mkdtempSync(join(tmpdir(), "chambeando-")), "old.db");
+  const old = new DatabaseSync(path);
+  old.exec(`CREATE TABLE users (phone TEXT PRIMARY KEY, country TEXT NOT NULL, summary TEXT NOT NULL, roles TEXT NOT NULL DEFAULT '[]',
+    regions TEXT NOT NULL DEFAULT '[]', modalities TEXT NOT NULL DEFAULT '[]', exclude TEXT NOT NULL DEFAULT '[]', embedding BLOB,
+    active INTEGER NOT NULL DEFAULT 1, frequency TEXT NOT NULL DEFAULT 'apenas', notify_hour INTEGER, matched_until TEXT NOT NULL,
+    last_template_at TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, name TEXT, min_salary INTEGER)`);
+  old.prepare("INSERT INTO users (phone, country, summary, frequency, notify_hour, matched_until, created_at, updated_at) VALUES (?, 'CL', 'contador', 'semanal', 16, ?, ?, ?)")
+    .run("+56911112222", now(), now(), now());
+  old.close();
+  const db = openDb(path);
+  const cols = (db.prepare("PRAGMA table_info(users)").all() as Array<{ name: string }>).map((c) => c.name);
+  for (const gone of ["frequency", "notify_hour", "last_template_at"]) assert.ok(!cols.includes(gone), gone);
+  assert.equal((db.prepare("SELECT summary FROM users").get() as { summary: string }).summary, "contador");
+});
+
+test("el mensaje automático ofrece los avisos que no caben", () => {
   const phone = "+56977778888";
-  await tools.guardar_preferencias({ phone, resumen: "vendedor", regiones: ["Metropolitana"] });
-  await addJob(db, { id: "otro", title: "Vendedor tienda" });
-  db.prepare("INSERT INTO deliveries (phone, job_id, status, created_at) VALUES (?, 'otro', 'pending', ?)").run(phone, now());
-  assert.deepEqual(await tools.frecuencia_avisos({ phone, frecuencia: "diaria", hora: 16 }), { frecuencia: "una vez al día, desde las 16:00", activo: true });
-  assert.equal((await tools.ver_perfil({ phone })).avisos_automaticos, "activos: una vez al día, desde las 16:00");
-  // Sin hora conserva la que tenía; "apenas" no usa hora.
-  assert.equal((await tools.frecuencia_avisos({ phone, frecuencia: "semanal" })).frecuencia, "una vez a la semana, los lunes desde las 16:00");
-  assert.equal((await tools.frecuencia_avisos({ phone, frecuencia: "apenas" })).frecuencia, "apenas aparecen, como mucho un mensaje cada 2 horas");
-  assert.equal((await tools.frecuencia_avisos({ phone, frecuencia: "diaria" })).frecuencia, "una vez al día, desde las 9:00");
-  await assert.rejects(tools.frecuencia_avisos({ phone, frecuencia: "diaria", hora: 21 }), /entre las 8 y las 18/);
-  const pending = db.prepare("SELECT COUNT(*) AS n FROM deliveries WHERE phone = ? AND status = 'pending'").get(phone) as { n: number };
-  assert.equal(pending.n, 1);
-  // El mensaje automático ofrece los que no caben.
   const job = { id: "a", title: "Diseñador", company: "X", location: "Viña", modality: null, salary: null, url: "https://x", published_at: null, country: "CL" } as any;
   assert.match(formatMessage([job], phone, 4), /Tengo 4 avisos más para ti/);
   assert.doesNotMatch(formatMessage([job], phone), /más para ti/);
