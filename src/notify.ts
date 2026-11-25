@@ -61,12 +61,17 @@ export type Sender = (msg: {
   text: string;
   key: string;
   template?: { name: string; language: string; params: string[] };
-}) => Promise<{ status: number; mode?: string; code?: string; message?: string }>;
+}) => Promise<{ status: number; id?: number; mode?: string; code?: string; message?: string }>;
+
+/** Si la persona ya respondió al mensaje que mandamos con ese id en Vatio. */
+export type Replied = (messageId: number) => Promise<boolean>;
+
+const vatioUrl = (path: string) => `${config.vatio.baseUrl}/api/server/v1/${config.vatio.workspace}${path}`;
 
 // POST /messages manda nuestro texto tal cual (con los links exactos) o, con la ventana de 24 h cerrada, la plantilla.
 // Vatio ya no acepta `brief` aquí; el agente ve el mensaje en la conversación y responde con ese contexto.
 export const vatioSender: Sender = async ({ to, text, key, template }) => {
-  const res = await fetch(`${config.vatio.baseUrl}/api/server/v1/${config.vatio.workspace}/messages`, {
+  const res = await fetch(vatioUrl("/messages"), {
     method: "POST",
     headers: {
       "content-type": "application/json",
@@ -77,7 +82,17 @@ export const vatioSender: Sender = async ({ to, text, key, template }) => {
     signal: AbortSignal.timeout(30_000),
   });
   const body = (await res.json().catch(() => ({}))) as any;
-  return { status: res.status, mode: body.mode, code: body.error?.code, message: body.error?.message };
+  return { status: res.status, id: body.id, mode: body.mode, code: body.error?.code, message: body.error?.message };
+};
+
+// Vatio marca `replied_at` en el mensaje cuando la persona contesta, sea lo que sea que escriba.
+export const vatioReplied: Replied = async (id) => {
+  const res = await fetch(vatioUrl(`/messages/${id}`), {
+    headers: { authorization: `Bearer ${config.vatio.serverKey}` },
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) throw new Error(`Vatio ${res.status} al leer el mensaje ${id}`);
+  return Boolean(((await res.json()) as { replied_at?: string | null }).replied_at);
 };
 
 const DAY = 86_400_000;
@@ -87,11 +102,12 @@ const DAY = 86_400_000;
  * - Ventana abierta: van como texto y quedan `sent`.
  * - Ventana cerrada: una plantilla como máximo cada 24 h; los avisos siguen `pending`
  *   hasta que la persona responde y el agente los entrega con `avisos_pendientes`.
+ * Cuándo se le puede escribir lo decide `canMessageNow`; si depende de que haya respondido, se le pregunta a Vatio.
  */
 export async function notifyAll(
   db: DatabaseSync,
   send: Sender,
-  opts: { at?: Date; ignoreSchedule?: boolean } = {},
+  opts: { at?: Date; ignoreSchedule?: boolean; replied?: Replied } = {},
 ): Promise<Record<SendResult | "waiting", number> & { errors: string[] }> {
   const out = { sent: 0, template: 0, outside_window: 0, failed: 0, waiting: 0, errors: [] as string[] };
   const phones = db
@@ -102,7 +118,8 @@ export async function notifyAll(
     .all() as Array<{ phone: string }>;
   for (const { phone } of phones) {
     const user = rowToUser(db.prepare("SELECT * FROM users WHERE phone = ?").get(phone) as any);
-    if (!opts.ignoreSchedule && !canMessageNow(user, opts.at)) {
+    const can = opts.ignoreSchedule || canMessageNow(user, opts.at);
+    if (can === false || (can === "if_replied" && !(await repliedToLast(user, opts.replied ?? vatioReplied, out.errors)))) {
       out.waiting++;
       continue;
     }
@@ -125,24 +142,41 @@ export async function notifyAll(
 
 /**
  * Si se le puede escribir ahora: dentro del horario de su país (8 a 19 h) y según la frecuencia que eligió.
- * - apenas: al menos 2 horas después del último mensaje automático.
- * - diaria: desde su hora, si hoy (en su país) todavía no se le escribió.
+ * - apenas: un mensaje automático al día (en su país). Otro el mismo día solo si respondió al anterior y pasaron
+ *   2 horas: entonces devuelve "if_replied" y quien llama revisa en Vatio si respondió.
+ * - diaria: desde su hora, si hoy todavía no se le escribió.
  * - semanal: lo mismo, solo los lunes.
- * Lo que no sale ahora queda pendiente para la próxima corrida.
+ * Lo que no sale ahora queda pendiente para la próxima corrida, o para cuando la persona escriba y el agente se lo
+ * entregue con `avisos_pendientes`.
  */
 export function canMessageNow(
   user: Pick<User, "country" | "last_notified_at"> & Partial<Pick<User, "frequency" | "notify_hour">>,
   at = new Date(),
-): boolean {
+): boolean | "if_replied" {
   const { hour, date } = localNow(user.country, at);
   const [from, to] = config.sendHours;
   if (hour < from || hour >= to) return false;
   const last = user.last_notified_at ? Date.parse(user.last_notified_at) : null;
+  const today = last !== null && localNow(user.country, new Date(last)).date === date;
   const frequency = user.frequency ?? "apenas";
-  if (frequency === "apenas") return last === null || at.getTime() - last >= config.minHoursBetweenMessages * 3_600_000;
+  if (frequency === "apenas") {
+    if (!today) return true;
+    return at.getTime() - last! >= config.minHoursBetweenMessages * 3_600_000 ? "if_replied" : false;
+  }
   if (hour < (user.notify_hour ?? config.defaultNotifyHour)) return false;
   if (frequency === "semanal" && new Date(`${date}T12:00:00Z`).getUTCDay() !== 1) return false;
-  return last === null || localNow(user.country, new Date(last)).date !== date;
+  return !today;
+}
+
+/** Si respondió al último mensaje automático. Sin su id (uno de antes de guardarlo) o si Vatio falla, no. */
+async function repliedToLast(user: User, replied: Replied, errors: string[]): Promise<boolean> {
+  if (user.last_message_id === null) return false;
+  try {
+    return await replied(user.last_message_id);
+  } catch (e) {
+    errors.push((e as Error).message);
+    return false;
+  }
 }
 
 export function pendingJobs(db: DatabaseSync, phone: string, limit: number): Job[] {
@@ -175,7 +209,7 @@ async function sendTo(db: DatabaseSync, user: User, jobs: Job[], send: Sender): 
   const first = await send({ to: user.phone, text, key });
   if (first.status === 200 || first.status === 202) {
     markSent(db, user.phone, jobs.map((j) => j.id));
-    db.prepare("UPDATE users SET last_notified_at = ? WHERE phone = ?").run(now(), user.phone);
+    db.prepare("UPDATE users SET last_notified_at = ?, last_message_id = ? WHERE phone = ?").run(now(), first.id ?? null, user.phone);
     return "sent";
   }
   if (first.code === "opted_out") {
@@ -200,6 +234,7 @@ async function sendTo(db: DatabaseSync, user: User, jobs: Job[], send: Sender): 
   if (second.status !== 200 && second.status !== 202) {
     throw new Error(`Vatio ${second.status} ${second.code ?? ""}: ${second.message ?? ""}`);
   }
-  db.prepare("UPDATE users SET last_template_at = ?, last_notified_at = ? WHERE phone = ?").run(now(), now(), user.phone);
+  db.prepare("UPDATE users SET last_template_at = ?, last_notified_at = ?, last_message_id = ? WHERE phone = ?")
+    .run(now(), now(), second.id ?? null, user.phone);
   return "template";
 }

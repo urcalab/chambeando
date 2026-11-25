@@ -55,7 +55,7 @@ flowchart LR
 | Ingesta | `src/ingest.ts` | Guarda los avisos nuevos, deduplica y calcula embeddings |
 | Embeddings | `src/embed.ts` | `multilingual-e5-small` en el mismo proceso, sin costo por llamada |
 | Match | `src/match.ts`, `src/llm.ts` | Filtros, similitud y juez (Claude Haiku vía OpenRouter) |
-| Envío | `src/notify.ts` | API de servidor de Vatio, como máximo una plantilla al día por persona |
+| Envío | `src/notify.ts` | API de servidor de Vatio: un mensaje automático al día por persona, otro solo si respondió |
 | Herramientas | `src/tools.ts`, `vatio/tools/` | Lo que el agente puede hacer en el backend |
 | Feedback | `src/feedback.ts` | Links con token, clics, "me sirvió", "postulé" y `GET /stats` |
 | Agente | `vatio/` | Instrucciones, personalidad y herramientas del agente en Vatio |
@@ -199,8 +199,9 @@ título (`jobKind` en `src/text.ts`). A quien busca su primer trabajo, el modelo
 más de un año de experiencia.
 
 Cada persona elige cada cuánto le llegan los avisos automáticos con `frecuencia_avisos`, aparte del perfil para no
-volver a cruzar avisos: `apenas` (por defecto: como mucho un mensaje cada 2 horas), `diaria` o `semanal` (los
-lunes), desde la hora que diga, de 8 a 18 (por defecto, 9). Todo dentro del horario de envío, de 8 a 19 h en su
+volver a cruzar avisos: `apenas` (por defecto: un mensaje al día apenas hay avisos, y otro ese mismo día solo si
+respondió al anterior, que Vatio marca con `replied_at`, y pasaron 2 horas), `diaria` o `semanal` (los lunes), desde
+la hora que diga, de 8 a 18 (por defecto, 9). Todo dentro del horario de envío, de 8 a 19 h en su
 país (`canMessageNow` en `src/notify.ts`). Cada mensaje trae hasta 3 avisos y ofrece los que no caben. Fuera de la
 ventana de 24 horas de WhatsApp sale como máximo una plantilla al día, sea cual sea la frecuencia.
 

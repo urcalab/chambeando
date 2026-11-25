@@ -7,7 +7,7 @@ parameters:
     frecuencia:
       type: string
       enum: [apenas, diaria, semanal]
-      description: "apenas: cuando aparecen, como mucho un mensaje cada 2 horas. diaria: una vez al día. semanal: una vez a la semana, los lunes."
+      description: "apenas: cuando aparecen, como mucho un mensaje al día; si responde, otro ese mismo día 2 horas después. diaria: una vez al día, a su hora. semanal: una vez a la semana, los lunes."
     hora:
       type: integer
       description: Hora local desde la que quiere recibirlos, de 8 a 18. Solo con diaria o semanal, y solo si la dijo (mañana 9, mediodía 12, tarde 16).

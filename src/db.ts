@@ -49,6 +49,8 @@ export type User = {
   searched_at: string | null;
   last_template_at: string | null;
   last_notified_at: string | null;
+  /** El id en Vatio del último mensaje automático, para saber si la persona le respondió. */
+  last_message_id: number | null;
 };
 
 const SCHEMA = `
@@ -100,6 +102,7 @@ CREATE TABLE IF NOT EXISTS users (
   searched_at TEXT,
   last_template_at TEXT,
   last_notified_at TEXT,
+  last_message_id INTEGER,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
@@ -173,6 +176,7 @@ const ADDED_COLUMNS: Array<[table: string, column: string, type: string]> = [
   ["users", "notify_hour", "INTEGER"],
   ["users", "searched_at", "TEXT"],
   ["users", "modality_regions", "TEXT NOT NULL DEFAULT '{}'"],
+  ["users", "last_message_id", "INTEGER"],
   ["deliveries", "applied", "INTEGER"],
   ["deliveries", "token", "TEXT"],
   ["deliveries", "clicks", "INTEGER NOT NULL DEFAULT 0"],
@@ -222,6 +226,7 @@ export function rowToUser(r: Row): User {
     searched_at: (r.searched_at as string | null) ?? null,
     last_template_at: (r.last_template_at as string | null) ?? null,
     last_notified_at: (r.last_notified_at as string | null) ?? null,
+    last_message_id: (r.last_message_id as number | null) ?? null,
   };
 }
 

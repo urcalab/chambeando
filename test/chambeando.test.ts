@@ -15,7 +15,7 @@ import { newRegions, sources } from "../src/cycle.ts";
 import type { Embedder } from "../src/embed.ts";
 import { parseVerdicts, type Judge } from "../src/llm.ts";
 import { matchAll, passesFilters } from "../src/match.ts";
-import { canMessageNow, formatMessage, notifyAll, salaryLine, type Sender } from "../src/notify.ts";
+import { canMessageNow, formatMessage, notifyAll, salaryLine, type Replied, type Sender } from "../src/notify.ts";
 import { computrabajo, parseListing, regionsFor, toJob as computrabajoJob } from "../src/sources/computrabajo.ts";
 import { HttpError, retryable, withRetries } from "../src/sources/http.ts";
 import { availableIn, getonboard, toJob as getonboardJob } from "../src/sources/getonboard.ts";
@@ -658,15 +658,18 @@ test("sin ADMIN_API_KEY la consola queda apagada", async () => {
   }
 });
 
-test("horario de envío: 8 a 19 h locales y 2 horas entre mensajes", () => {
+test("horario de envío: 8 a 19 h locales, y otro mensaje el mismo día solo si respondió", () => {
   // 23-11-2026 en Santiago es UTC-3 (verano).
   const at = (utc: string) => new Date(utc);
   assert.equal(localNow("CL", at("2026-11-23T15:00:00Z")).hour, 12);
   assert.equal(canMessageNow({ country: "CL", last_notified_at: null }, at("2026-11-23T15:00:00Z")), true);
   assert.equal(canMessageNow({ country: "CL", last_notified_at: null }, at("2026-11-24T00:07:00Z")), false); // 21:07
   assert.equal(canMessageNow({ country: "CL", last_notified_at: null }, at("2026-11-23T10:30:00Z")), false); // 07:30
+  // Ya se le escribió hoy: antes de 2 horas, no; después, solo si respondió (lo revisa notifyAll en Vatio).
   assert.equal(canMessageNow({ country: "CL", last_notified_at: "2026-11-23T14:00:00Z" }, at("2026-11-23T15:00:00Z")), false);
-  assert.equal(canMessageNow({ country: "CL", last_notified_at: "2026-11-23T12:59:00Z" }, at("2026-11-23T15:00:00Z")), true);
+  assert.equal(canMessageNow({ country: "CL", last_notified_at: "2026-11-23T12:59:00Z" }, at("2026-11-23T15:00:00Z")), "if_replied");
+  // El de ayer no cuenta: el primero del día sale sin más.
+  assert.equal(canMessageNow({ country: "CL", last_notified_at: "2026-11-22T21:00:00Z" }, at("2026-11-23T11:00:00Z")), true); // 8:00
   // La misma hora UTC es otra hora local en México (UTC-6): 9:00 allá.
   assert.equal(canMessageNow({ country: "MX", last_notified_at: null }, at("2026-11-23T15:00:00Z")), true);
   assert.equal(canMessageNow({ country: "MX", last_notified_at: null }, at("2026-11-23T13:30:00Z")), false); // 07:30
@@ -806,6 +809,57 @@ test("frecuencia: una vez al día o a la semana, desde su hora", () => {
   assert.equal(canMessageNow({ ...weekly, last_notified_at: "2026-11-30T12:00:00Z" }, at("2026-11-30T18:00:00Z")), false);
   // El horario de envío vale para todas.
   assert.equal(canMessageNow({ ...daily, notify_hour: 18 }, at("2026-11-24T22:30:00Z")), false); // 19:30
+});
+
+test("apenas: un mensaje automático al día, y otro el mismo día solo si respondió al anterior", async () => {
+  const db = openDb(":memory:");
+  const phone = "+56977778888";
+  await createTools(db, fakeEmbed, null).guardar_preferencias({ phone, resumen: "contador" });
+  const pend = async (id: string) => {
+    await addJob(db, { id, title: `Contador ${id}` });
+    db.prepare("INSERT INTO deliveries (phone, job_id, score, status, created_at) VALUES (?, ?, 1, 'pending', ?)").run(phone, id, now());
+  };
+  // En Santiago es UTC-3: 12:00Z son las 9:00.
+  let nextId = 100;
+  const send: Sender = async () => ({ status: 202, mode: "text", id: nextId++ });
+  const answered = new Set<number>();
+  const asked: number[] = [];
+  const replied: Replied = async (id) => (asked.push(id), answered.has(id));
+  const run = (utc: string) => notifyAll(db, send, { at: new Date(utc), replied });
+  const notifiedAt = (utc: string) => db.prepare("UPDATE users SET last_notified_at = ? WHERE phone = ?").run(utc, phone);
+
+  await pend("a");
+  assert.equal((await run("2026-11-23T12:00:00Z")).sent, 1);
+  assert.deepEqual(asked, []);
+  notifiedAt("2026-11-23T12:00:00Z");
+
+  // Tres horas después hay otro, pero no respondió al de la mañana: espera.
+  await pend("b");
+  assert.equal((await run("2026-11-23T15:00:00Z")).waiting, 1);
+  assert.deepEqual(asked, [100]);
+  // Respondió: la ventana está abierta y sale en la corrida siguiente.
+  answered.add(100);
+  assert.equal((await run("2026-11-23T16:00:00Z")).sent, 1);
+  notifiedAt("2026-11-23T16:00:00Z");
+
+  // A ese no respondió: el siguiente espera hasta mañana, y mañana sale sin preguntar.
+  await pend("c");
+  assert.equal((await run("2026-11-23T19:00:00Z")).waiting, 1);
+  assert.deepEqual(asked, [100, 100, 101]);
+  assert.equal((await run("2026-11-24T11:00:00Z")).sent, 1);
+  assert.equal(asked.length, 3);
+  notifiedAt("2026-11-24T11:00:00Z");
+
+  // Un mensaje de antes de guardar su id cuenta como sin respuesta, sin preguntarle a Vatio.
+  db.prepare("UPDATE users SET last_message_id = NULL WHERE phone = ?").run(phone);
+  await pend("d");
+  assert.equal((await run("2026-11-24T15:00:00Z")).waiting, 1);
+  assert.equal(asked.length, 3);
+  // Si Vatio falla al leer el mensaje, también espera, y el error queda en el resultado.
+  db.prepare("UPDATE users SET last_message_id = 102 WHERE phone = ?").run(phone);
+  const failing = await notifyAll(db, send, { at: new Date("2026-11-24T15:00:00Z"), replied: async () => { throw new Error("Vatio 500"); } });
+  assert.equal(failing.waiting, 1);
+  assert.deepEqual(failing.errors, ["Vatio 500"]);
 });
 
 test("frecuencia de los avisos: se guarda sin tocar lo pendiente y se ve en el perfil", async () => {
