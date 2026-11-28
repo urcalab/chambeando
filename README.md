@@ -43,8 +43,9 @@ flowchart LR
 2. **El backend trae avisos.** Cada hora pide los avisos nuevos a cada portal, los normaliza, descarta los
    repetidos y calcula un embedding de cada uno.
 3. **El backend cruza avisos y personas.** Para cada persona: filtros duros, los 8 avisos más parecidos a
-   alguno de sus cargos (cada cargo tiene su propio embedding; sin cargos, se usa el del perfil entero) y un modelo
-   de lenguaje que decide cuáles valen un mensaje.
+   alguno de sus cargos (cada cargo tiene su propio embedding; sin cargos, se usa el del perfil entero; un aviso
+   publicado hace más de 3 meses pierde 0,03 frente a los recientes) y un modelo de lenguaje que decide cuáles
+   valen un mensaje.
 4. **Vatio entrega.** El backend le pide a Vatio que escriba a la persona; Vatio lo manda como mensaje libre si la
    ventana de 24 horas está abierta, o como plantilla aprobada por Meta si no.
 5. **La persona responde.** "Ese no, piden inglés", "postulé al segundo": el agente lo registra y el juez lo lee
@@ -183,9 +184,13 @@ Talento Perú no respondieron desde fuera de Perú.
 
 El mismo aviso puede estar en dos portales o republicarse con otro id. Al guardar, cada aviso recibe una
 huella (`dedupeKey` en `src/ingest.ts`): país, cargo, empresa sin forma societaria y región; si la empresa
-es confidencial, el comienzo de la descripción en su lugar. Dos avisos con la misma huella y una localidad en
-común son el mismo: el primero queda como original y los demás se guardan con `duplicate_of`, sin embedding,
-y nunca se ofrecen. La misma vacante en dos comunas distintas cuenta como dos avisos.
+no viene o es confidencial, el comienzo de la descripción en su lugar. Dos avisos con la misma huella y una
+localidad en común son el mismo: el primero queda como original y los demás se guardan con `duplicate_of`, sin
+embedding, y nunca se ofrecen. La misma vacante en dos comunas distintas cuenta como dos avisos.
+
+Cuando un portal dice la empresa y otro no, las huellas no coinciden. Ese aviso es el mismo si tiene el mismo
+cargo y región, y comparte al menos la mitad de las palabras de la descripción (`SAME_AD_WORDS`). El parecido de
+embeddings no sirve para esto: dos avisos de una empresa que solo cambian la jornada o el local pasan de 0,98.
 
 ## Perfil de cada persona
 

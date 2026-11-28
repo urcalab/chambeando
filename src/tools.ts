@@ -7,7 +7,7 @@ import type { Judge } from "./llm.ts";
 import { pastFeedback, queriesOf, rank, userText } from "./match.ts";
 import { jobLink } from "./feedback.ts";
 import { PORTALS, markSent, pendingJobs, salaryLine } from "./notify.ts";
-import { COUNTRIES, ENABLED_COUNTRIES, JOB_KINDS, publishedAgo, countryOf, countryOfPhone, normalizePhone, regionOf, type Country, type JobKind, type Modality, type ModalityRegions } from "./text.ts";
+import { COUNTRIES, ENABLED_COUNTRIES, JOB_KINDS, publishedAgo, countryOf, countryOfPhone, normalize, normalizePhone, regionOf, type Country, type JobKind, type Modality, type ModalityRegions } from "./text.ts";
 
 const SUPPORTED = `Países disponibles: ${ENABLED_COUNTRIES.map((c) => COUNTRIES[c]).join(", ")}.`;
 
@@ -196,11 +196,20 @@ export function createTools(db: DatabaseSync, embed: Embedder, judge: Judge | nu
     const sent = db.prepare("SELECT job_id FROM deliveries WHERE phone = ? AND job_id = ? AND status = 'sent'");
     if (sent.get(phone, ref)) return ref;
     const token = ref.trim().replace(/\/+$/, "").split("/").pop()!.toLowerCase();
-    if (token.length < 6) return null;
-    const rows = db
-      .prepare("SELECT job_id FROM deliveries WHERE phone = ? AND status = 'sent' AND token LIKE ? LIMIT 2")
-      .all(phone, `${token}%`) as Array<{ job_id: string }>;
-    return rows.length === 1 ? rows[0]!.job_id : null;
+    if (token.length >= 6) {
+      const rows = db
+        .prepare("SELECT job_id FROM deliveries WHERE phone = ? AND status = 'sent' AND token LIKE ? LIMIT 2")
+        .all(phone, `${token}%`) as Array<{ job_id: string }>;
+      if (rows.length === 1) return rows[0]!.job_id;
+    }
+    // A veces el agente manda algo del título ("ID 1420 SERPAJ…" llegó como "1420"): vale si calza con uno solo.
+    const words = normalize(ref);
+    if (words.length < 3) return null;
+    const titles = db
+      .prepare("SELECT d.job_id, j.title FROM deliveries d JOIN jobs j ON j.id = d.job_id WHERE d.phone = ? AND d.status = 'sent'")
+      .all(phone) as Array<{ job_id: string; title: string }>;
+    const hits = titles.filter((s) => ` ${normalize(s.title)} `.includes(` ${words} `));
+    return hits.length === 1 ? hits[0]!.job_id : null;
   }
 
   return {

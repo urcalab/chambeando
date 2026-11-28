@@ -3,7 +3,7 @@ import { config } from "./config.ts";
 import { fromBlob, fromBlobs, now, rowToUser, toBlobs, type Job, type User } from "./db.ts";
 import { dot, type Embedder } from "./embed.ts";
 import type { Judge, PastFeedback } from "./llm.ts";
-import { acceptedModalities, jobKind, modalityRegionOk, normalize, regionMatches } from "./text.ts";
+import { acceptedModalities, daysSincePublished, jobKind, modalityRegionOk, normalize, regionMatches } from "./text.ts";
 
 const KIND_WORDS = { practica: "práctica profesional", part_time: "part-time, medio tiempo", full_time: "tiempo completo" };
 
@@ -43,6 +43,14 @@ export function passesFilters(
 export type Scored = { job: Job; score: number };
 
 /**
+ * Un aviso publicado hace más de 3 meses que sigue abierto casi siempre es una búsqueda permanente (consultoras que
+ * dejan el mismo aviso todo el año). No se descarta, porque la fecha la informa cada portal a su manera, pero pierde
+ * frente a los recientes: la diferencia de parecido entre los candidatos de una persona suele ser de centésimas.
+ */
+export const STALE_DAYS = 90;
+export const STALE_PENALTY = 0.03;
+
+/**
  * Con qué se buscan avisos para una persona: un vector por cada uno de sus cargos, o el del perfil entero si no dijo
  * cargos. Con el del perfil, los cargos de quien busca varias cosas se promediaban, y el resumen (sueldo, lugar,
  * modalidad, que ya filtran los filtros duros) pesaba más que el trabajo: a una historiadora que buscaba archivo o
@@ -65,7 +73,7 @@ export async function fillRoleVectors(db: DatabaseSync, embed: Embedder): Promis
 
 /**
  * Los avisos más parecidos a la persona que pasan los filtros y que todavía no recibió. Cada aviso vale lo que su
- * mejor parecido con `queries` (ver `queriesOf`).
+ * mejor parecido con `queries` (ver `queriesOf`), menos `STALE_PENALTY` si es viejo.
  */
 export function rank(
   db: DatabaseSync,
@@ -87,7 +95,8 @@ export function rank(
     if (!passesFilters(user, row)) continue;
     const { embedding, ...job } = row;
     const v = fromBlob(embedding);
-    scored.push({ job, score: Math.max(...queries.map((q) => dot(q, v))) });
+    const stale = (daysSincePublished(job.published_at, user.country) ?? 0) > STALE_DAYS;
+    scored.push({ job, score: Math.max(...queries.map((q) => dot(q, v))) - (stale ? STALE_PENALTY : 0) });
   }
   scored.sort((a, b) => b.score - a.score);
   // Los portales republican el mismo aviso con otro id: se deja solo el primero de cada uno.

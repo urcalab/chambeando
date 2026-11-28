@@ -157,15 +157,27 @@ export function localNow(country: Country, at = new Date()): { date: string; hou
   return { date: `${parts.year}-${parts.month}-${parts.day}`, hour: Number(parts.hour) };
 }
 
-/** "hoy", "ayer", "hace 3 días" o "el 12-11", a partir de la fecha en que el portal publicó el aviso. */
-export function publishedAgo(publishedAt: string | null | undefined, country: Country, at = new Date()): string | null {
-  const day = publishedAt?.match(/^(\d{4})-(\d{2})-(\d{2})/);
+/** Días entre la publicación del aviso y hoy, en la fecha del país. */
+export function daysSincePublished(publishedAt: string | null | undefined, country: Country, at = new Date()): number | null {
+  const day = publishedAt?.match(/^\d{4}-\d{2}-\d{2}/);
   if (!day) return null;
-  const diff = Math.round((Date.parse(`${localNow(country, at).date}T00:00:00Z`) - Date.parse(`${day[0]}T00:00:00Z`)) / 86_400_000);
+  return Math.round((Date.parse(`${localNow(country, at).date}T00:00:00Z`) - Date.parse(`${day[0]}T00:00:00Z`)) / 86_400_000);
+}
+
+/**
+ * "hoy", "ayer", "hace 3 días", "el 12-11" o "hace 4 meses", a partir de la fecha en que el portal publicó el aviso.
+ * Desde un mes se dice cuánto hace: "el 05-02" no deja ver que el aviso es de hace casi un año.
+ */
+export function publishedAgo(publishedAt: string | null | undefined, country: Country, at = new Date()): string | null {
+  const diff = daysSincePublished(publishedAt, country, at);
+  if (diff === null) return null;
   if (diff <= 0) return "hoy";
   if (diff === 1) return "ayer";
   if (diff < 7) return `hace ${diff} días`;
-  return `el ${day[3]}-${day[2]}`;
+  if (diff < 30) return `el ${publishedAt!.slice(8, 10)}-${publishedAt!.slice(5, 7)}`;
+  if (diff < 60) return "hace un mes";
+  if (diff < 365) return `hace ${Math.floor(diff / 30)} meses`;
+  return "hace más de un año";
 }
 
 export type Modality = "presencial" | "hibrido" | "remoto";

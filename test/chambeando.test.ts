@@ -10,12 +10,12 @@ import { linkToken, recordClick, stats } from "../src/feedback.ts";
 import { maskPhone, phoneId } from "../src/admin.ts";
 import { createApp } from "../src/server.ts";
 import type { AddressInfo } from "node:net";
-import { dedupeKey, ingest, localityOf, sameLocality } from "../src/ingest.ts";
+import { companyKey, dedupeKey, ingest, localityOf, SAME_AD_WORDS, sameLocality, sharedWords } from "../src/ingest.ts";
 import { newRegions, sources } from "../src/cycle.ts";
 import type { Embedder } from "../src/embed.ts";
-import { parseVerdicts, type Judge } from "../src/llm.ts";
-import { fillRoleVectors, matchAll, passesFilters, queriesOf, rank } from "../src/match.ts";
-import { canMessageNow, formatMessage, notifyAll, salaryLine, type Replied, type Sender } from "../src/notify.ts";
+import { buildPrompt, parseVerdicts, type Judge } from "../src/llm.ts";
+import { fillRoleVectors, matchAll, passesFilters, queriesOf, rank, STALE_PENALTY } from "../src/match.ts";
+import { canMessageNow, formatMessage, notifyAll, salaryLine, templateTitle, type Replied, type Sender } from "../src/notify.ts";
 import { computrabajo, parseListing, regionsFor, toJob as computrabajoJob } from "../src/sources/computrabajo.ts";
 import { HttpError, retryable, withRetries } from "../src/sources/http.ts";
 import { availableIn, getonboard, toJob as getonboardJob } from "../src/sources/getonboard.ts";
@@ -307,6 +307,39 @@ test("se busca con un vector por cargo, y con el del perfil entero solo si no di
   assert.equal(await fillRoleVectors(db, fakeEmbed), 0);
 });
 
+test("un aviso de hace más de 3 meses pierde frente a uno reciente igual de parecido", async () => {
+  const db = openDb(":memory:");
+  await addJob(db, { id: "viejo", title: "Contador general", company: "A" });
+  await addJob(db, { id: "nuevo", title: "Contador general", company: "B" });
+  const day = (ago: number) => new Date(Date.now() - ago * 86_400_000).toISOString().slice(0, 10);
+  db.prepare("UPDATE jobs SET published_at = ? WHERE id = 'viejo'").run(day(200));
+  db.prepare("UPDATE jobs SET published_at = ? WHERE id = 'nuevo'").run(day(0));
+  const tools = createTools(db, fakeEmbed, null);
+  const phone = "+56911110012";
+  await tools.guardar_preferencias({ phone, resumen: "contador", cargos: ["contador"] });
+  const user = (await import("../src/db.ts")).getUser(db, phone)!;
+  const queries = queriesOf(db.prepare("SELECT embedding, role_embeddings FROM users WHERE phone = ?").get(phone) as any);
+  const [first, second] = rank(db, user, queries, { limit: 2, skipStatuses: [] });
+  assert.equal(first!.job.id, "nuevo");
+  assert.ok(Math.abs(first!.score - second!.score - STALE_PENALTY) < 1e-6);
+});
+
+test("el juez sabe cuándo solo le sirve remoto, y la plantilla corta el cargo donde termina una parte", () => {
+  const user = {
+    country: "CL", summary: "ventas", studies: null, first_job: null, job_kinds: [], roles: [], regions: [],
+    modalities: ["remoto"], modality_regions: {}, min_salary: null, exclude: [],
+  } as any;
+  assert.match(buildPrompt(user, [], []), /Modalidad: solo remoto/);
+  assert.match(buildPrompt(user, [], []), /salvo si solo le sirve remoto/);
+  assert.doesNotMatch(buildPrompt({ ...user, modalities: ["presencial", "remoto"] }, [], []), /solo remoto/);
+  assert.equal(
+    templateTitle("Software Engineer Full Stack (.NET Core / React)  para empresa Retail en Las Condes"),
+    "Software Engineer Full Stack (.NET Core / React) para empresa Retail",
+  );
+  assert.equal(templateTitle("Analista de Gestión Documental y Procedimientos Jr."), "Analista de Gestión Documental y Procedimientos Jr");
+  assert.equal(templateTitle("Ingeniero de Software ".repeat(6)).length <= 81, true);
+});
+
 test("lo que sale al buscar guarda por qué: el motivo del modelo, o que salió sin revisión", async () => {
   const db = openDb(":memory:");
   await addJob(db, { id: "a", title: "Contador general" });
@@ -558,6 +591,23 @@ test("duplicados: el mismo aviso en dos portales o republicado se guarda una vez
   assert.ok(ids.includes("bumeran-pe:1"));
   assert.ok(!ids.includes("computrabajo-pe:9"));
   assert.equal(new Set(ids).size, ids.length);
+
+  // Un portal dice la empresa y otro no (o la deja confidencial), y cada uno da el lugar a su manera: es el mismo
+  // aviso si la descripción es en buena parte la misma. Con otra descripción, son dos avisos.
+  const text = "Buscamos asesor comercial para desarrollo de negocios en el sector salud, con cartera de clientes y metas mensuales.";
+  const withCo = { ...base, id: "bumeran-pe:20", source_id: "20", title: "Asesor Comercial - Sector Salud", company: "PeopleGo", location: "San Isidro, Lima", description: text };
+  const noCo = { ...withCo, id: "computrabajo-pe:21", source_id: "21", source: "computrabajo", company: null, location: "Lima", description: `${text} Postula aquí.` };
+  const confCo = { ...noCo, id: "computrabajo-pe:22", source_id: "22", company: "Empresa Confidencial", location: "Miraflores, Lima" };
+  const otherAd = { ...noCo, id: "computrabajo-pe:23", source_id: "23", description: "Clínica requiere asesor para venta de planes de salud en sucursal, turnos rotativos." };
+  assert.equal(companyKey("Empresa Confidencial"), "");
+  await ingest(db, fakeEmbed, { "bumeran-pe": { source: source([withCo]), maxPages: 1 } });
+  const third = await ingest(db, fakeEmbed, { "computrabajo-pe": { source: source([noCo, confCo, otherAd]), maxPages: 1 } });
+  assert.deepEqual([third["computrabajo-pe"]!.added, third["computrabajo-pe"]!.duplicates], [1, 2]);
+  const dupOf = (id: string) => (db.prepare("SELECT duplicate_of FROM jobs WHERE id = ?").get(id) as any).duplicate_of;
+  assert.equal(dupOf("computrabajo-pe:21"), "bumeran-pe:20");
+  assert.equal(dupOf("computrabajo-pe:22"), "bumeran-pe:20");
+  assert.equal(dupOf("computrabajo-pe:23"), null);
+  assert.ok(sharedWords(text, otherAd.description) < SAME_AD_WORDS);
 });
 
 test("feedback: links con token cuentan clics, y la opinión y la postulación llegan a las métricas", async () => {
@@ -588,6 +638,9 @@ test("feedback: links con token cuentan clics, y la opinión y la postulación l
     assert.deepEqual(await tools.registrar_opinion({ phone, aviso_id: token, util: true }), { registrado: true });
     assert.deepEqual(await tools.registrar_opinion({ phone, aviso_id: link, util: true }), { registrado: true });
     await assert.rejects(tools.registrar_opinion({ phone, aviso_id: "zzzzzzzz", util: true }), /No le hemos mandado/);
+    // Un pedazo del título vale si calza con uno solo de los que recibió ("ID 1420 SERPAJ…" llegó como "1420").
+    await assert.rejects(tools.registrar_opinion({ phone, aviso_id: "Contador", util: false }), /No le hemos mandado/);
+    assert.deepEqual(await tools.registrar_opinion({ phone, aviso_id: "junior", util: false }), { registrado: true });
     await tools.registrar_opinion({ phone, aviso_id: saved.avisos[0]!.id, util: true, postulo: true });
     // Vatio no manda `util: false` en el body: si no viene, no le sirvió.
     await tools.registrar_opinion({ phone, aviso_id: saved.avisos[1]!.id, motivo: "pedían inglés" });
@@ -709,6 +762,10 @@ test("fecha de publicación legible en el mensaje", () => {
   assert.equal(publishedAgo("2026-11-22", "CL", at), "ayer");
   assert.equal(publishedAgo("2026-11-20 18:00", "CL", at), "hace 3 días");
   assert.equal(publishedAgo("2026-11-02", "CL", at), "el 02-11");
+  // Desde un mes se dice cuánto hace, para que no parezca nuevo un aviso de febrero.
+  assert.equal(publishedAgo("2026-10-12", "CL", at), "hace un mes");
+  assert.equal(publishedAgo("2026-02-05", "CL", at), "hace 9 meses");
+  assert.equal(publishedAgo("2025-09-01", "CL", at), "hace más de un año");
   assert.equal(publishedAgo(null, "CL", at), null);
   const job = { id: "a", title: "Diseñador", company: "X", location: "Viña", modality: null, salary: null, url: "https://x", published_at: new Date().toISOString().slice(0, 10), country: "CL" } as any;
   assert.match(formatMessage([job], "+56911112222"), /Publicado hoy/);

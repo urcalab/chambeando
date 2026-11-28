@@ -53,6 +53,25 @@ export function formatMessage(jobs: Job[], phone: string, more = 0): string {
   ].filter(Boolean).join("\n\n");
 }
 
+/**
+ * El cargo como va en la plantilla, que le pone un punto después. Un cargo largo se corta donde termina una parte
+ * ("Software Engineer Full Stack (.NET Core / React)" y no "… para empresa Retail en Las Con") o, si no hay, en una
+ * palabra entera. Sin puntuación al final, para que no quede "Jr..".
+ */
+export function templateTitle(title: string, max = 80): string {
+  const clean = (s: string) => s.replace(/[\s.,;:\-–|/]+$/u, "");
+  const t = title.replace(/\s+/g, " ").trim();
+  if (t.length <= max) return clean(t);
+  const head = t.slice(0, max + 1);
+  const balanced = (s: string) => (s.match(/\(/g)?.length ?? 0) === (s.match(/\)/g)?.length ?? 0);
+  const part = [" - ", " – ", " | ", " (", " para ", " en "]
+    .map((sep) => head.lastIndexOf(sep))
+    .filter((i) => i >= 20 && balanced(t.slice(0, i)))
+    .sort((a, b) => b - a)[0];
+  if (part !== undefined) return clean(t.slice(0, part));
+  return `${clean(head.slice(0, head.lastIndexOf(" ")))}…`;
+}
+
 export type SendResult = "sent" | "template" | "failed";
 
 /** Manda un mensaje por la API de servidor de Vatio. `template` solo se usa si la ventana de 24 h está cerrada. */
@@ -209,7 +228,7 @@ async function sendTo(db: DatabaseSync, user: User, jobs: Job[], send: Sender): 
     template: {
       name: config.vatio.template,
       language: "es",
-      params: [String(total), jobs[0]!.title.slice(0, 80)],
+      params: [String(total), templateTitle(jobs[0]!.title)],
     },
   });
   if (second.status !== 200 && second.status !== 202) {

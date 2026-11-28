@@ -17,7 +17,9 @@ export function buildPrompt(user: User, past: PastFeedback[], jobs: Job[]): stri
     user.job_kinds.length ? `Tipo de trabajo: ${user.job_kinds.join(", ")}` : "",
     user.roles.length ? `Cargos: ${user.roles.join(", ")}` : "",
     user.regions.length ? `Regiones: ${user.regions.join(", ")}` : "Regiones: cualquiera",
-    user.modalities.length ? `Modalidad: ${acceptedModalities(user.modalities).join(", ")}` : "",
+    user.modalities.length
+      ? `Modalidad: ${acceptedModalities(user.modalities).join(", ") === "remoto" ? "solo remoto" : acceptedModalities(user.modalities).join(", ")}`
+      : "",
     ...Object.entries(user.modality_regions).map(([m, r]) => `${m === "hibrido" ? "Híbrido" : "Presencial"} solo en: ${r.join(", ")}`),
     user.min_salary ? `Sueldo mensual mínimo, en moneda local: ${user.min_salary}` : "",
     user.exclude.length ? `No quiere: ${user.exclude.join(", ")}` : "",
@@ -39,7 +41,9 @@ export function buildPrompt(user: User, past: PastFeedback[], jobs: Job[]): stri
     "el cargo corresponde a su profesión y nivel, y el trabajo no incluye nada de lo que no quiere.",
     "Lo que no quiere vale para el cargo y para las funciones del aviso, aunque lo diga con otras palabras y sea solo",
     "una parte del trabajo: si no quiere atención al público, no sirve un aviso que pide atender clientes, pacientes o usuarios.",
-    "Ante la duda, no sirve. Que el aviso no informe sueldo o modalidad no lo descarta.",
+    "Ante la duda, no sirve. Que el aviso no informe sueldo o modalidad no lo descarta, salvo si solo le sirve remoto:",
+    "entonces un aviso sin modalidad sirve solo si el trabajo se puede hacer a distancia, y no uno que por sus funciones",
+    "es en un lugar (atender en una clínica, tienda o sucursal, operar equipos, trabajo en terreno).",
     "Si busca su primer trabajo: descarta los avisos que exigen más de un año de experiencia o un cargo de jefatura,",
     "y prefiere los que dicen sin experiencia, práctica, trainee, junior o que capacitan. Que pidan estar estudiando o",
     "ser egresado de su carrera sí sirve. Si pidió práctica, un empleo normal no sirve, y al revés.",

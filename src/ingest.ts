@@ -20,10 +20,35 @@ const LEGAL = /\b(s a s|sas|s a c|sac|s a de c v|s de r l de c v|s r l|srl|s a|s
  * distinguir dos avisos de igual título, así que se usa el comienzo de la descripción.
  */
 export function dedupeKey(j: Pick<NewJob, "country" | "title" | "company" | "region" | "description">): string {
-  const company = normalize(j.company ?? "").replace(LEGAL, " ").replace(/\s+/g, " ").trim();
+  const company = companyKey(j.company);
   const who = company || `?${normalize(j.description).slice(0, 120)}`;
   return [j.country, normalize(j.title), who, j.region ?? ""].join("|");
 }
+
+/** La empresa sin forma societaria; vacía si el aviso no la dice o la deja confidencial. */
+export function companyKey(company: string | null | undefined): string {
+  const c = normalize(company ?? "").replace(LEGAL, " ").replace(/\s+/g, " ").trim();
+  return /^(empresa )?(confidencial|reservad[ao])$/.test(c) ? "" : c;
+}
+
+/** Qué parte de las palabras de dos descripciones comparten (las de más de 3 letras). */
+export function sharedWords(a: string, b: string): number {
+  const words = (s: string) => new Set(normalize(s).split(" ").filter((w) => w.length > 3));
+  const x = words(a);
+  const y = words(b);
+  let both = 0;
+  for (const w of x) if (y.has(w)) both++;
+  return both / (x.size + y.size - both || 1);
+}
+
+/**
+ * El mismo aviso en un portal que dice la empresa y en otro que no la dice tiene distinta huella. Se reconoce por
+ * el mismo cargo en la misma región y la descripción en buena parte igual, sin mirar la localidad, que un portal
+ * da por comuna ("Las Condes") y otro por ciudad ("Santiago"). En avisos reales de Chile, los pares así que eran el
+ * mismo aviso compartían el 70 % de las palabras, y el que no lo era, el 7 %. El parecido de los embeddings no
+ * sirve: dos avisos de una empresa que solo cambian la jornada o el local pasan de 0,98.
+ */
+export const SAME_AD_WORDS = 0.5;
 
 const PLACE_NOISE = new Set(["region", "provincia", "departamento", "estado", "de", "del", "la", "las", "los", "el", "y", "r", "d", "c", "df", "dc"]);
 
@@ -72,9 +97,23 @@ export async function ingest(
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
   const originals = db.prepare("SELECT id, locality FROM jobs WHERE dedupe_key = ? AND duplicate_of IS NULL");
-  const findOriginal = (key: string, locality: string[]): string | null => {
+  const sameTitle = db.prepare(
+    "SELECT id, company, description, dedupe_key FROM jobs WHERE dedupe_key >= ? AND dedupe_key < ? AND duplicate_of IS NULL",
+  );
+  const findOriginal = (key: string, locality: string[], job: NewJob): string | null => {
     const rows = originals.all(key) as Array<{ id: string; locality: string | null }>;
-    return rows.find((r) => sameLocality(locality, r.locality ? r.locality.split(" ") : []))?.id ?? null;
+    const exact = rows.find((r) => sameLocality(locality, r.locality ? r.locality.split(" ") : []))?.id;
+    if (exact) return exact;
+    // El mismo aviso con la empresa en un portal y sin ella en otro (ver SAME_AD_WORDS).
+    const [country, title] = key.split("|");
+    const prefix = `${country}|${title}|`;
+    const hidden = !companyKey(job.company);
+    const candidates = sameTitle.all(prefix, `${prefix}\uffff`) as Array<{ id: string; company: string | null; description: string; dedupe_key: string }>;
+    return candidates.find((r) =>
+      r.dedupe_key.split("|").at(-1) === (job.region ?? "") &&
+      !companyKey(r.company) !== hidden &&
+      sharedWords(r.description, job.description) >= SAME_AD_WORDS,
+    )?.id ?? null;
   };
   const report: IngestReport = {};
   // Los portales de un mismo operador van uno tras otro, para no sumarle carga; operadores distintos, en paralelo.
@@ -93,7 +132,7 @@ export async function ingest(
       const inBatch = new Map<string, Array<{ id: string; locality: string[] }>>();
       const dupOf = keyed.map(({ job, key, locality }) => {
         const prior =
-          findOriginal(key, locality) ?? inBatch.get(key)?.find((o) => sameLocality(locality, o.locality))?.id ?? null;
+          findOriginal(key, locality, job) ?? inBatch.get(key)?.find((o) => sameLocality(locality, o.locality))?.id ?? null;
         if (!prior) inBatch.set(key, [...(inBatch.get(key) ?? []), { id: job.id, locality }]);
         return prior;
       });
@@ -104,7 +143,7 @@ export async function ingest(
       let duplicates = 0;
       keyed.forEach(({ job: j, key, locality }, i) => {
         // Se vuelve a mirar: mientras se calculaban los embeddings, otro portal pudo guardar el original.
-        const prior = dupOf[i] ?? findOriginal(key, locality);
+        const prior = dupOf[i] ?? findOriginal(key, locality, j);
         const vector = dupOf[i] ? null : vectors[v++]!;
         if (prior) duplicates++;
         insert.run(
